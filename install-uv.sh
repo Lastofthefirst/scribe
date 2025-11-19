@@ -274,8 +274,8 @@ print_info "  • Create an optimized virtual environment"
 print_info "  • Install all dependencies (this may take a few minutes)"
 echo ""
 
-# UV will handle everything: Python version, venv, dependencies
-uv sync --frozen
+# UV will handle everything: Python version, venv, dependencies, and generate lockfile
+uv sync
 
 print_success "Scribe installed successfully"
 echo ""
