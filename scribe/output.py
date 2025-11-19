@@ -83,7 +83,12 @@ class OutputHandler:
                 logger.warning("Found wtype (only works with wlroots compositors like sway, NOT KDE/GNOME)")
                 return "wtype"
 
-            logger.warning("No Wayland typing tool found (dotool/kdotool/ydotool recommended)")
+            # Fallback to xdotool on Wayland (works via XWayland)
+            if shutil.which("xdotool"):
+                logger.info("Found xdotool (works on Wayland via XWayland)")
+                return "xdotool"
+
+            logger.warning("No typing tool found for Wayland")
             return None
 
         elif is_x11:

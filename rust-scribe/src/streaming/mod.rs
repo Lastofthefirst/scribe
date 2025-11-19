@@ -63,7 +63,7 @@ impl StreamingRecorder {
         let config = StreamConfig {
             channels: self.channels,
             sample_rate: cpal::SampleRate(self.sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(self.frame_size as u32),
+            buffer_size: cpal::BufferSize::Default,
         };
 
         // Shared state

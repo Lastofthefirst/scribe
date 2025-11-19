@@ -110,7 +110,7 @@ impl AudioRecorder {
         let config = StreamConfig {
             channels: self.channels,
             sample_rate: cpal::SampleRate(self.sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(self.frame_size as u32),
+            buffer_size: cpal::BufferSize::Default,
         };
 
         // Shared state between stream and main thread
@@ -238,7 +238,7 @@ impl AudioRecorder {
         let config = StreamConfig {
             channels: self.channels,
             sample_rate: cpal::SampleRate(self.sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(self.frame_size as u32),
+            buffer_size: cpal::BufferSize::Default,
         };
 
         let audio_buffer: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::new()));

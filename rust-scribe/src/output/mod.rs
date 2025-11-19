@@ -58,7 +58,12 @@ impl OutputHandler {
                 log::warn!("Found wtype (only works with wlroots compositors, NOT KDE/GNOME)");
                 return Some("wtype".to_string());
             }
-            log::warn!("No Wayland typing tool found");
+            // Fallback to xdotool on Wayland (works via XWayland)
+            if which::which("xdotool").is_ok() {
+                log::info!("Found xdotool (works on Wayland via XWayland)");
+                return Some("xdotool".to_string());
+            }
+            log::warn!("No typing tool found for Wayland");
             None
         } else if is_x11 {
             if which::which("xdotool").is_ok() {
