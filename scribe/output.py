@@ -208,24 +208,26 @@ class OutputHandler:
             logger.debug("Waiting 1.0s for notifications to clear...")
             time.sleep(1.0)
 
-            # Explicitly focus the target window
+            # Activate the target window (not just focus - this sends real events)
+            # windowactivate switches desktops if needed and avoids synthetic event rejection
             try:
-                logger.info(f"Focusing window {window_id}")
+                logger.info(f"Activating window {window_id}")
                 result = subprocess.run(
-                    ["xdotool", "windowfocus", "--sync", window_id],
+                    ["xdotool", "windowactivate", "--sync", window_id],
                     capture_output=True,
                     text=True,
                     timeout=2,
                 )
                 if result.returncode != 0:
-                    logger.warning(f"Could not focus window: {result.stderr}")
-                    logger.warning("Will try to type anyway...")
+                    logger.error(f"Could not activate window: {result.stderr}")
+                    return False
                 else:
-                    logger.info("Window focused successfully")
-                    # Small delay after focusing
-                    time.sleep(0.3)
+                    logger.info("Window activated successfully")
+                    # Longer delay to ensure window is ready to receive input
+                    time.sleep(0.5)
             except Exception as e:
-                logger.warning(f"Error focusing window: {e}")
+                logger.error(f"Error activating window: {e}")
+                return False
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)

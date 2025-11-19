@@ -311,11 +311,19 @@ def test_typing(config):
     click.echo("Testing typing functionality...")
     click.echo(f"Detected typing tool: {output_handler.typing_tool}")
     click.echo("\n⚠️  FOCUS A TEXT EDITOR OR TERMINAL NOW!")
-    click.echo("Text will be typed in 3 seconds...\n")
+    click.echo("Text will be typed in 5 seconds...\n")
 
-    for i in range(3, 0, -1):
+    # Countdown to give user time to switch focus
+    for i in range(5, 0, -1):
         click.echo(f"{i}...")
         time.sleep(1)
+
+    # NOW capture the window that the user focused (not the terminal)
+    click.echo("Capturing target window...")
+    output_handler.capture_target_window()
+
+    # Small delay to ensure capture completed
+    time.sleep(0.5)
 
     test_text = "Hello from Scribe! This is a typing test."
     click.echo(f"\nTyping test message: '{test_text}'")
