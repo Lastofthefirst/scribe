@@ -106,8 +106,16 @@ else
     DEPS_TO_INSTALL+=("python3-pip")
 fi
 
+# Check pkg-config (needed for library detection)
+if command -v pkg-config &> /dev/null; then
+    print_success "pkg-config found"
+else
+    print_warning "pkg-config not found"
+    DEPS_TO_INSTALL+=("pkg-config")
+fi
+
 # Check portaudio (required for sounddevice)
-if ldconfig -p | grep -q libportaudio; then
+if command -v pkg-config &> /dev/null && pkg-config --exists portaudio-2.0; then
     print_success "PortAudio library found"
 else
     print_warning "PortAudio library not found"
@@ -120,6 +128,24 @@ else
             ;;
         pacman)
             DEPS_TO_INSTALL+=("portaudio" "python")
+            ;;
+    esac
+fi
+
+# Check FFmpeg libraries (required for av/PyAV package)
+if command -v pkg-config &> /dev/null && pkg-config --exists libavformat libavcodec; then
+    print_success "FFmpeg libraries found"
+else
+    print_warning "FFmpeg libraries not found"
+    case "$PKG_MANAGER" in
+        apt)
+            DEPS_TO_INSTALL+=("ffmpeg" "libavcodec-dev" "libavformat-dev" "libavdevice-dev" "libavutil-dev" "libavfilter-dev" "libswscale-dev" "libswresample-dev")
+            ;;
+        dnf)
+            DEPS_TO_INSTALL+=("ffmpeg" "ffmpeg-devel")
+            ;;
+        pacman)
+            DEPS_TO_INSTALL+=("ffmpeg")
             ;;
     esac
 fi

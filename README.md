@@ -41,11 +41,13 @@ cd scribe
 ```
 
 The installation script will:
-1. ✅ Check and install system dependencies
+1. ✅ Check and install system dependencies (including FFmpeg, PortAudio)
 2. ✅ Install Python packages
 3. ✅ Create configuration files
 4. ✅ Download the default speech model
 5. ✅ Set up everything for immediate use
+
+> **Installation Issues?** See [INSTALL_TROUBLESHOOTING.md](INSTALL_TROUBLESHOOTING.md) for common problems and solutions.
 
 ### First Run
 
