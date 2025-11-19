@@ -90,6 +90,10 @@ class Transcriber:
             # Load model if not already loaded
             model = self._load_model()
 
+            # Ensure audio is 1D (squeeze out channel dimension if present)
+            if audio.ndim > 1:
+                audio = audio.squeeze()
+
             # Convert int16 to float32 and normalize to [-1, 1]
             audio_float = audio.astype(np.float32) / 32768.0
 
@@ -163,6 +167,10 @@ class Transcriber:
         try:
             # Load model if not already loaded
             model = self._load_model()
+
+            # Ensure audio is 1D (squeeze out channel dimension if present)
+            if audio.ndim > 1:
+                audio = audio.squeeze()
 
             # Convert int16 to float32 and normalize
             audio_float = audio.astype(np.float32) / 32768.0
