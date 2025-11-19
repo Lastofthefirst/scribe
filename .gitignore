@@ -50,3 +50,10 @@ audio_recordings/
 models/
 logs/
 config.toml
+
+# Debug and development
+debug_*.py
+*.bak
+test_*.mp3
+test_*.wav
+scribe_debug.log

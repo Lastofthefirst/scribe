@@ -7,14 +7,17 @@ Scribe is a lightweight, privacy-focused speech-to-text utility designed for Lin
 ## ✨ Features
 
 - **🚀 Fast & Efficient**: Uses Faster-Whisper with optimized models (tiny.en runs 9.67x faster than real-time on CPU)
-- **🔒 Privacy-First**: 100% local processing, no data sent to cloud services
+- **🔒 Privacy-First**: 100% local processing, no data sent to cloud services, models cached locally
 - **🎯 Smart Recording**: Automatic pause detection using Voice Activity Detection (VAD)
+- **⚡ Streaming Mode**: Text appears in real-time as you speak with chunk-by-chunk transcription
 - **⌨️ Seamless Output**: Types directly at cursor position or copies to clipboard
-- **🔔 User-Friendly**: Desktop notifications and audio feedback (fully configurable)
-- **🖥️ Desktop Integration**: Works with both X11 and Wayland
+- **🖥️ Universal Desktop Support**: Full support for both X11 and Wayland (KDE Plasma, GNOME, etc.)
+  - Auto-detects display server and installs correct tools (dotool/kdotool for Wayland, xdotool for X11)
+- **🔔 User-Friendly**: Desktop notifications with smart timeouts (brief "still listening" notifications during streaming)
+- **⏱️ Smart Timeouts**: Streaming mode auto-stops after 5 minutes or on long pause (configurable)
 - **⚙️ Highly Configurable**: TOML-based configuration with sensible defaults
 - **🧪 Well-Tested**: Comprehensive test suite following TDD principles
-- **📦 Easy Installation**: One-command installation script
+- **📦 Easy Installation**: One-command installation script with automatic dependency detection
 
 ## 🎯 Use Cases
 
@@ -46,10 +49,13 @@ The UV installation script will:
 1. ✅ Install UV package manager (if needed)
 2. ✅ Automatically download the correct Python version (3.11-3.13)
 3. ✅ Check and install system dependencies (FFmpeg, PortAudio)
-4. ✅ Install all Python packages (lightning fast!)
-5. ✅ Create configuration files
-6. ✅ Download the default speech model
-7. ✅ Set up everything for immediate use
+4. ✅ Auto-detect your display server (Wayland/X11) and install appropriate typing tools
+   - Wayland: Installs dotool (recommended) or ydotool
+   - X11: Installs xdotool
+5. ✅ Install all Python packages (lightning fast!)
+6. ✅ Create configuration files
+7. ✅ Download the default speech model (cached locally, no repeated downloads)
+8. ✅ Set up everything for immediate use
 
 ### Alternative: Traditional Installation
 

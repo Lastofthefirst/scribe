@@ -48,12 +48,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned Features
-- Multi-language support with auto-detection
-- Custom vocabulary and context
-- Voice commands for punctuation
-- Daemon mode for background service
-- GUI configuration tool
-- Real-time streaming display
-- Text editor integrations
-- Additional desktop environment support
+### Added
+- **Wayland Priority Support**: Full Wayland support with auto-detection
+  - dotool support (recommended for Wayland - no daemon, works everywhere)
+  - kdotool support (KDE-specific via KWin DBus)
+  - Automatic display server detection (Wayland/X11)
+  - Auto-installation of correct typing tools during setup
+- **Model Caching**: Offline-first model loading
+  - Models loaded from local cache first (no network check)
+  - Only downloads if not in cache
+  - Eliminates HuggingFace rate limit errors
+  - Faster startup times
+- **Streaming Mode Improvements**:
+  - Maximum duration timeout (5 minutes, configurable)
+  - Brief "still listening" notifications after each chunk (500ms)
+  - "Finished transcribing" notification with preview
+  - Smart timeout prevents infinite recordings
+- **Window Focus Protection**: Target window captured before notifications to prevent focus stealing
+- **Notification Improvements**:
+  - Configurable per-notification timeouts
+  - Brief notifications don't interrupt workflow
+  - Low urgency notifications for status updates
+
+### Fixed
+- Streaming mode not stopping after long timeout
+- Model downloading on every run (now caches properly)
+- xdotool not working on Wayland (now uses dotool/kdotool)
+- Synthetic event rejection in modern applications
+- Focus loss from notifications interfering with text output
+
+### Changed
+- Typing tool detection now prioritizes Wayland tools
+- Installation script auto-detects display server
+- Window activation uses windowactivate instead of windowfocus (avoids synthetic events)
+- Brief notifications use 500ms timeout instead of 3000ms
+
+## [0.1.0] - 2024-11-19 (Initial Release)
