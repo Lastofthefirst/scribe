@@ -151,6 +151,7 @@ class Scribe:
                 self.audio_recorder,
                 self.transcriber,
                 self.output_handler,
+                notification_handler=self.notification_handler,
                 chunk_pause=0.8,  # Short pause to trigger chunk transcription
                 final_pause=2.0,  # Long pause to end recording
             )
@@ -161,11 +162,11 @@ class Scribe:
 
             if not transcription:
                 logger.warning("No transcription generated")
-                self.notification_handler.notify_error("No speech detected")
+                # Note: "finished" notification already shown by StreamingRecorder
                 return 1
 
             logger.info(f"Complete transcription: {transcription}")
-            self.notification_handler.notify_transcription_complete(transcription)
+            # Note: "finished" notification already shown by StreamingRecorder
             return 0
 
         except KeyboardInterrupt:

@@ -17,8 +17,10 @@ class StreamingRecorder:
         audio_recorder,
         transcriber,
         output_handler,
+        notification_handler=None,
         chunk_pause: float = 0.8,
         final_pause: float = 2.0,
+        max_duration: float = 300.0,  # 5 minutes max
     ):
         """Initialize streaming recorder.
 
@@ -26,14 +28,18 @@ class StreamingRecorder:
             audio_recorder: AudioRecorder instance.
             transcriber: Transcriber instance.
             output_handler: OutputHandler instance.
+            notification_handler: NotificationHandler instance (optional).
             chunk_pause: Short pause duration (seconds) to trigger chunk transcription.
             final_pause: Long pause duration (seconds) to end recording.
+            max_duration: Maximum recording duration (seconds) before auto-stop.
         """
         self.audio_recorder = audio_recorder
         self.transcriber = transcriber
         self.output_handler = output_handler
+        self.notification_handler = notification_handler
         self.chunk_pause = chunk_pause
         self.final_pause = final_pause
+        self.max_duration = max_duration
 
         self.sample_rate = audio_recorder.sample_rate
         self.frame_size = audio_recorder.frame_size
@@ -99,6 +105,16 @@ class StreamingRecorder:
                                     self._transcribe_and_output_chunk(current_chunk)
                                     last_chunk_time = time.time()
 
+                                    # Show brief "still listening" notification (500ms)
+                                    if self.notification_handler:
+                                        self.notification_handler._show_notification(
+                                            "Scribe Streaming",
+                                            "Still listening...",
+                                            "audio-input-microphone",
+                                            urgency="low",
+                                            timeout=500,  # Very brief - 0.5 seconds
+                                        )
+
                                 current_chunk = []
                                 silence_start = None
 
@@ -106,6 +122,12 @@ class StreamingRecorder:
                             if silence_duration >= self.final_pause:
                                 logger.info(f"Final pause detected ({silence_duration:.1f}s), ending recording")
                                 break
+
+                    # Check for maximum duration timeout
+                    elapsed_time = time.time() - recording_start
+                    if elapsed_time >= self.max_duration:
+                        logger.info(f"Maximum duration reached ({elapsed_time:.1f}s), ending recording")
+                        break
 
                 # Transcribe any remaining audio
                 if len(current_chunk) > 0:
@@ -116,6 +138,23 @@ class StreamingRecorder:
 
                 recording_duration = time.time() - recording_start
                 logger.info(f"Streaming recording complete: {recording_duration:.1f}s total")
+
+                # Show "finished" notification
+                if self.notification_handler:
+                    total_text = " ".join(self.transcribed_text)
+                    if total_text:
+                        preview = total_text[:50] + "..." if len(total_text) > 50 else total_text
+                        self.notification_handler._show_notification(
+                            "Scribe Complete",
+                            f"Transcription finished: {preview}",
+                            "dialog-information",
+                        )
+                    else:
+                        self.notification_handler._show_notification(
+                            "Scribe Complete",
+                            "Recording ended (no speech detected)",
+                            "dialog-information",
+                        )
 
                 return " ".join(self.transcribed_text)
 

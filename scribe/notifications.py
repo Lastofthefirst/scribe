@@ -143,6 +143,7 @@ class NotificationHandler:
         message: str,
         icon: str = "dialog-information",
         urgency: str = "normal",
+        timeout: int = None,
     ) -> bool:
         """Show desktop notification.
 
@@ -151,6 +152,7 @@ class NotificationHandler:
             message: Notification message.
             icon: Icon name or path.
             urgency: Urgency level ("low", "normal", "critical").
+            timeout: Notification timeout in milliseconds (None = use default).
 
         Returns:
             True if successful, False otherwise.
@@ -159,13 +161,17 @@ class NotificationHandler:
             logger.debug("No notification tool available, skipping notification")
             return False
 
+        # Use provided timeout or default
+        if timeout is None:
+            timeout = self.notification_timeout
+
         try:
             if self.notify_tool == "notify-send":
-                return self._notify_with_notify_send(title, message, icon, urgency)
+                return self._notify_with_notify_send(title, message, icon, urgency, timeout)
             elif self.notify_tool == "kdialog":
-                return self._notify_with_kdialog(title, message, icon)
+                return self._notify_with_kdialog(title, message, icon, timeout)
             elif self.notify_tool == "zenity":
-                return self._notify_with_zenity(title, message, icon)
+                return self._notify_with_zenity(title, message, icon, timeout)
             else:
                 logger.warning(f"Unknown notification tool: {self.notify_tool}")
                 return False
@@ -180,6 +186,7 @@ class NotificationHandler:
         message: str,
         icon: str,
         urgency: str,
+        timeout: int,
     ) -> bool:
         """Show notification using notify-send.
 
@@ -188,6 +195,7 @@ class NotificationHandler:
             message: Notification message.
             icon: Icon name.
             urgency: Urgency level.
+            timeout: Timeout in milliseconds.
 
         Returns:
             True if successful, False otherwise.
@@ -197,7 +205,7 @@ class NotificationHandler:
             "-a", "Scribe",
             "-i", icon,
             "-u", urgency,
-            "-t", str(self.notification_timeout),
+            "-t", str(timeout),
             title,
             message,
         ]
@@ -210,13 +218,14 @@ class NotificationHandler:
             logger.error(f"notify-send error: {e.stderr.decode()}")
             return False
 
-    def _notify_with_kdialog(self, title: str, message: str, icon: str) -> bool:
+    def _notify_with_kdialog(self, title: str, message: str, icon: str, timeout: int) -> bool:
         """Show notification using kdialog (KDE).
 
         Args:
             title: Notification title.
             message: Notification message.
             icon: Icon name.
+            timeout: Timeout in milliseconds.
 
         Returns:
             True if successful, False otherwise.
@@ -224,7 +233,7 @@ class NotificationHandler:
         cmd = [
             "kdialog",
             "--passivepopup", message,
-            str(self.notification_timeout // 1000),
+            str(timeout // 1000),  # kdialog uses seconds
             "--title", title,
             "--icon", icon,
         ]
@@ -237,13 +246,14 @@ class NotificationHandler:
             logger.error(f"kdialog error: {e.stderr.decode()}")
             return False
 
-    def _notify_with_zenity(self, title: str, message: str, icon: str) -> bool:
+    def _notify_with_zenity(self, title: str, message: str, icon: str, timeout: int) -> bool:
         """Show notification using zenity (GNOME).
 
         Args:
             title: Notification title.
             message: Notification message.
             icon: Icon name.
+            timeout: Timeout in milliseconds.
 
         Returns:
             True if successful, False otherwise.
@@ -252,7 +262,7 @@ class NotificationHandler:
             "zenity",
             "--notification",
             "--text", f"{title}\n{message}",
-            "--timeout", str(self.notification_timeout // 1000),
+            "--timeout", str(timeout // 1000),  # zenity uses seconds
         ]
 
         try:
