@@ -37,7 +37,7 @@ Scribe is a lightweight, privacy-focused speech-to-text utility designed for Lin
 **UV is the modern, fast Python package manager** - 10-100x faster than pip and handles Python versions automatically!
 
 ```bash
-git clone https://github.com/Lastofthefirst/scribe.git
+git clone git@github.com:Lastofthefirst/dustCMS.git
 cd scribe
 ./install-uv.sh
 ```
