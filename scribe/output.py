@@ -252,9 +252,9 @@ class OutputHandler:
                     logger.error(f"Error detecting window: {e}")
                     return False
 
-            # Wait for notifications to clear
-            logger.debug("Waiting 1.0s for notifications to clear...")
-            time.sleep(1.0)
+            # Wait for notifications to clear (reduced from 1.0s for faster typing)
+            logger.debug("Waiting 0.6s for notifications to clear...")
+            time.sleep(0.6)
 
             # Activate the target window (not just focus - this sends real events)
             # windowactivate switches desktops if needed and avoids synthetic event rejection
@@ -344,9 +344,9 @@ class OutputHandler:
             logger.info(f"Attempting to type {len(text)} characters with dotool")
             logger.debug(f"Text to type: '{text[:50]}...'")
 
-            # Wait for notifications to clear
-            logger.debug("Waiting 1.0s for notifications to clear...")
-            time.sleep(1.0)
+            # Wait for notifications to clear (reduced from 1.0s for faster typing)
+            logger.debug("Waiting 0.6s for notifications to clear...")
+            time.sleep(0.6)
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)
@@ -419,9 +419,9 @@ class OutputHandler:
             logger.info(f"Attempting to type {len(text)} characters with kdotool")
             logger.debug(f"Text to type: '{text[:50]}...'")
 
-            # Wait for notifications to clear
-            logger.debug("Waiting 1.0s for notifications to clear...")
-            time.sleep(1.0)
+            # Wait for notifications to clear (reduced from 1.0s for faster typing)
+            logger.debug("Waiting 0.6s for notifications to clear...")
+            time.sleep(0.6)
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)

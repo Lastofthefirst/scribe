@@ -1,0 +1,56 @@
+[package]
+name = "scribe-rust"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Scribe Contributors"]
+description = "Fast, local speech-to-text for Linux (Rust implementation)"
+license = "MIT"
+
+[[bin]]
+name = "scribe"
+path = "src/main.rs"
+
+[dependencies]
+# Whisper (speech recognition) - TODO: implement
+# whisper-rs = { version = "0.15", features = ["cuda"] }
+
+# Audio - TODO: implement
+# cpal = "0.15"
+
+# VAD - TODO: implement
+# webrtc-vad = "0.4"
+
+# CLI
+clap = { version = "4", features = ["derive", "cargo"] }
+
+# Config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Clipboard
+cli-clipboard = "0.4"
+
+# Notifications - TODO: use subprocess like Python version
+# notify-rust = { version = "4", default-features = false, features = ["zbus"] }
+
+# Error handling & Logging
+anyhow = "1"
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+
+# Async (for streaming) - TODO: implement
+# tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Cross-platform paths
+dirs = "5"
+
+# Tool detection
+which = "6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true  # Remove debug symbols for smaller binary
