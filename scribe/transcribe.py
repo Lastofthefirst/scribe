@@ -42,6 +42,9 @@ class Transcriber:
     def _load_model(self) -> WhisperModel:
         """Load Whisper model.
 
+        First attempts to load from local cache only (no network access).
+        Falls back to downloading if model not found locally.
+
         Returns:
             WhisperModel instance.
         """
@@ -50,14 +53,33 @@ class Transcriber:
             start_time = time.time()
 
             try:
-                self.model = WhisperModel(
-                    self.model_size,
-                    device=self.device,
-                    compute_type=self.compute_type,
-                )
+                # First try: Load from local cache only (no network check)
+                # This avoids the HuggingFace rate limit and speeds up loading
+                try:
+                    logger.debug("Attempting to load model from local cache...")
+                    self.model = WhisperModel(
+                        self.model_size,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                        local_files_only=True,
+                    )
+                    load_time = time.time() - start_time
+                    logger.info(f"Model loaded from cache in {load_time:.2f}s")
 
-                load_time = time.time() - start_time
-                logger.info(f"Model loaded in {load_time:.2f}s")
+                except Exception as cache_error:
+                    # Model not in cache, download it
+                    logger.info(f"Model not in cache, downloading...")
+                    logger.info("This is a one-time download, future runs will be faster")
+
+                    self.model = WhisperModel(
+                        self.model_size,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                        local_files_only=False,
+                    )
+
+                    load_time = time.time() - start_time
+                    logger.info(f"Model downloaded and loaded in {load_time:.2f}s")
 
             except Exception as e:
                 logger.error(f"Failed to load model: {e}")

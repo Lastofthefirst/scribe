@@ -134,8 +134,21 @@ else
     esac
 fi
 
-# Check for typing tool (xdotool for X11, ydotool for Wayland)
+# Check for typing tool based on display server
+# Priority: Wayland (dotool/kdotool) > X11 (xdotool)
 TYPING_TOOL_FOUND=false
+
+# Check what's already installed
+if command -v dotool &> /dev/null; then
+    print_success "dotool found (Wayland/X11/TTY - recommended)"
+    TYPING_TOOL_FOUND=true
+fi
+
+if command -v kdotool &> /dev/null; then
+    print_success "kdotool found (KDE Plasma Wayland/X11)"
+    TYPING_TOOL_FOUND=true
+fi
+
 if command -v xdotool &> /dev/null; then
     print_success "xdotool found (X11 support)"
     TYPING_TOOL_FOUND=true
@@ -146,26 +159,31 @@ if command -v ydotool &> /dev/null; then
     TYPING_TOOL_FOUND=true
 fi
 
-if command -v wtype &> /dev/null; then
-    print_success "wtype found (Wayland support)"
-    TYPING_TOOL_FOUND=true
-fi
-
 if [ "$TYPING_TOOL_FOUND" = false ]; then
-    print_warning "No typing tool found (xdotool/ydotool/wtype)"
-    if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-        print_info "Wayland detected, will install ydotool"
-        case "$PKG_MANAGER" in
-            apt)
-                DEPS_TO_INSTALL+=("ydotool")
-                ;;
-            dnf)
-                DEPS_TO_INSTALL+=("ydotool")
-                ;;
-            pacman)
-                DEPS_TO_INSTALL+=("ydotool")
-                ;;
-        esac
+    print_warning "No typing tool found"
+
+    # Detect display server
+    if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+        print_info "Wayland detected - will install dotool (recommended) or ydotool"
+
+        # Check if Rust/Cargo is available for dotool
+        if command -v cargo &> /dev/null; then
+            print_info "Cargo found - will install dotool via cargo (best option)"
+            INSTALL_DOTOOL_VIA_CARGO=true
+        else
+            print_info "Cargo not found - will install ydotool from package manager"
+            case "$PKG_MANAGER" in
+                apt)
+                    DEPS_TO_INSTALL+=("ydotool")
+                    ;;
+                dnf)
+                    DEPS_TO_INSTALL+=("ydotool")
+                    ;;
+                pacman)
+                    DEPS_TO_INSTALL+=("ydotool")
+                    ;;
+            esac
+        fi
     else
         print_info "X11 detected, will install xdotool"
         DEPS_TO_INSTALL+=("xdotool")
@@ -241,6 +259,41 @@ else
 fi
 
 echo ""
+
+# Step 1.5: Install dotool via cargo if needed
+if [ "$INSTALL_DOTOOL_VIA_CARGO" = true ]; then
+    print_header "Step 1.5: Installing dotool (Wayland Typing Tool)"
+    echo ""
+
+    print_info "Installing dotool via cargo..."
+    print_info "This may take a few minutes to compile..."
+
+    # Ensure cargo bin is in PATH
+    export PATH="$HOME/.cargo/bin:$PATH"
+
+    # Install dotool
+    cargo install dotool
+
+    if command -v dotool &> /dev/null; then
+        print_success "dotool installed successfully"
+    else
+        print_warning "dotool installation failed, will fallback to ydotool"
+        # Fall back to ydotool
+        case "$PKG_MANAGER" in
+            apt)
+                sudo apt install -y ydotool
+                ;;
+            dnf)
+                sudo dnf install -y ydotool
+                ;;
+            pacman)
+                sudo pacman -S --noconfirm ydotool
+                ;;
+        esac
+    fi
+
+    echo ""
+fi
 
 # Step 2: Install UV if needed
 if [ "$INSTALL_UV" = true ]; then

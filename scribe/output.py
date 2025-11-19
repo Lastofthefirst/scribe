@@ -40,28 +40,72 @@ class OutputHandler:
         logger.info(f"OutputHandler initialized: mode={mode}, tool={self.typing_tool}")
 
     def _detect_typing_tool(self) -> Optional[str]:
-        """Detect available typing tool (xdotool, ydotool, or wtype).
+        """Detect available typing tool based on display server.
+
+        Priority order:
+        - Wayland: dotool > kdotool > ydotool > wtype
+        - X11: xdotool
 
         Returns:
             Name of available tool, or None if none found.
         """
-        # Try xdotool (X11)
-        if shutil.which("xdotool"):
-            logger.debug("Found xdotool (X11)")
-            return "xdotool"
+        import os
 
-        # Try ydotool (Wayland)
-        if shutil.which("ydotool"):
-            logger.debug("Found ydotool (Wayland)")
-            return "ydotool"
+        # Detect display server
+        session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+        wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
 
-        # Try wtype (Wayland)
-        if shutil.which("wtype"):
-            logger.debug("Found wtype (Wayland)")
-            return "wtype"
+        is_wayland = session_type == "wayland" or wayland_display
+        is_x11 = session_type == "x11" or os.environ.get("DISPLAY", "")
 
-        logger.warning("No typing tool found (xdotool/ydotool/wtype)")
-        return None
+        logger.debug(f"Display server detection: XDG_SESSION_TYPE={session_type}, is_wayland={is_wayland}, is_x11={is_x11}")
+
+        if is_wayland:
+            # Wayland tools (in priority order)
+
+            # dotool: Best for Wayland, no daemon needed, works everywhere
+            if shutil.which("dotool"):
+                logger.info("Found dotool (Wayland - recommended)")
+                return "dotool"
+
+            # kdotool: KDE-specific, uses KWin DBus
+            if shutil.which("kdotool"):
+                logger.info("Found kdotool (Wayland/KDE)")
+                return "kdotool"
+
+            # ydotool: Universal but requires daemon
+            if shutil.which("ydotool"):
+                logger.info("Found ydotool (Wayland)")
+                return "ydotool"
+
+            # wtype: Only works with wlroots (sway), NOT KDE/GNOME
+            if shutil.which("wtype"):
+                logger.warning("Found wtype (only works with wlroots compositors like sway, NOT KDE/GNOME)")
+                return "wtype"
+
+            logger.warning("No Wayland typing tool found (dotool/kdotool/ydotool recommended)")
+            return None
+
+        elif is_x11:
+            # X11 tool
+            if shutil.which("xdotool"):
+                logger.info("Found xdotool (X11)")
+                return "xdotool"
+
+            logger.warning("No X11 typing tool found (xdotool recommended)")
+            return None
+
+        else:
+            # Unknown/fallback - try all
+            logger.warning("Could not detect display server type, trying all tools...")
+
+            for tool in ["dotool", "kdotool", "xdotool", "ydotool", "wtype"]:
+                if shutil.which(tool):
+                    logger.info(f"Found {tool} (fallback detection)")
+                    return tool
+
+            logger.error("No typing tool found")
+            return None
 
     def capture_target_window(self):
         """Capture the currently focused window for later typing.
@@ -153,7 +197,11 @@ class OutputHandler:
             return self._to_clipboard(text)
 
         try:
-            if self.typing_tool == "xdotool":
+            if self.typing_tool == "dotool":
+                return self._type_with_dotool(text)
+            elif self.typing_tool == "kdotool":
+                return self._type_with_kdotool(text)
+            elif self.typing_tool == "xdotool":
                 return self._type_with_xdotool(text)
             elif self.typing_tool == "ydotool":
                 return self._type_with_ydotool(text)
@@ -278,6 +326,152 @@ class OutputHandler:
             return False
         except Exception as e:
             logger.error(f"Unexpected error in xdotool typing: {e}", exc_info=True)
+            return False
+
+    def _type_with_dotool(self, text: str) -> bool:
+        """Type text using dotool (Wayland).
+
+        dotool reads commands from stdin and simulates input using uinput.
+        Works on Wayland, X11, and even TTYs. No daemon needed.
+
+        Args:
+            text: Text to type.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            logger.info(f"Attempting to type {len(text)} characters with dotool")
+            logger.debug(f"Text to type: '{text[:50]}...'")
+
+            # Wait for notifications to clear
+            logger.debug("Waiting 1.0s for notifications to clear...")
+            time.sleep(1.0)
+
+            if self.typing_delay > 0:
+                # Type with delay (gradual appearance)
+                logger.debug(f"Typing with delay: {self.typing_delay}s per character")
+                for char in text:
+                    # dotool reads from stdin: "type X" for each character
+                    result = subprocess.run(
+                        ["dotool"],
+                        input=f"type {char}",
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        logger.error(f"dotool failed: {result.stderr}")
+                        return False
+                    time.sleep(self.typing_delay)
+            else:
+                # Type all at once - dotool command: "type text here"
+                logger.debug("Typing all text at once")
+                result = subprocess.run(
+                    ["dotool"],
+                    input=f"type {text}",
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode != 0:
+                    logger.error(f"dotool failed: {result.stderr}")
+                    return False
+
+                if result.stderr:
+                    logger.warning(f"dotool stderr: {result.stderr}")
+
+            # Press Enter if requested
+            if self.auto_enter:
+                logger.debug("Pressing Enter key")
+                result = subprocess.run(
+                    ["dotool"],
+                    input="key enter",
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    logger.error(f"dotool Enter failed: {result.stderr}")
+                    return False
+
+            logger.info(f"Text typed successfully with dotool ({len(text)} chars)")
+            return True
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"dotool error: {e.stderr.decode() if e.stderr else str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error in dotool typing: {e}", exc_info=True)
+            return False
+
+    def _type_with_kdotool(self, text: str) -> bool:
+        """Type text using kdotool (Wayland/KDE).
+
+        kdotool uses KWin's DBus interface for window management and typing.
+        Works only on KDE Plasma (both X11 and Wayland).
+
+        Args:
+            text: Text to type.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            logger.info(f"Attempting to type {len(text)} characters with kdotool")
+            logger.debug(f"Text to type: '{text[:50]}...'")
+
+            # Wait for notifications to clear
+            logger.debug("Waiting 1.0s for notifications to clear...")
+            time.sleep(1.0)
+
+            if self.typing_delay > 0:
+                # Type with delay (gradual appearance)
+                logger.debug(f"Typing with delay: {self.typing_delay}s per character")
+                for char in text:
+                    result = subprocess.run(
+                        ["kdotool", "type", char],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        logger.error(f"kdotool failed: {result.stderr}")
+                        return False
+                    time.sleep(self.typing_delay)
+            else:
+                # Type all at once
+                logger.debug("Typing all text at once")
+                result = subprocess.run(
+                    ["kdotool", "type", text],
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode != 0:
+                    logger.error(f"kdotool failed: {result.stderr}")
+                    return False
+
+                if result.stderr:
+                    logger.warning(f"kdotool stderr: {result.stderr}")
+
+            # Press Enter if requested
+            if self.auto_enter:
+                logger.debug("Pressing Enter key")
+                result = subprocess.run(
+                    ["kdotool", "key", "Return"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    logger.error(f"kdotool Enter failed: {result.stderr}")
+                    return False
+
+            logger.info(f"Text typed successfully with kdotool ({len(text)} chars)")
+            return True
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"kdotool error: {e.stderr.decode() if e.stderr else str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error in kdotool typing: {e}", exc_info=True)
             return False
 
     def _type_with_ydotool(self, text: str) -> bool:
