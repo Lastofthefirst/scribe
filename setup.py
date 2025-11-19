@@ -19,7 +19,7 @@ setup(
     url="https://github.com/Lastofthefirst/scribe",
     license="MIT",
     packages=find_packages(),
-    python_requires=">=3.8",
+    python_requires=">=3.8,<3.14",  # 3.14+ not yet supported by onnxruntime
     install_requires=[
         "faster-whisper>=1.0.0",
         "sounddevice>=0.4.6",
@@ -46,6 +46,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Multimedia :: Sound/Audio :: Speech",
         "Topic :: Utilities",
     ],

@@ -32,20 +32,34 @@ Scribe is a lightweight, privacy-focused speech-to-text utility designed for Lin
 
 ## 🚀 Quick Start
 
-### One-Command Installation
+### One-Command Installation (UV - Recommended)
+
+**UV is the modern, fast Python package manager** - 10-100x faster than pip and handles Python versions automatically!
+
+```bash
+git clone https://github.com/Lastofthefirst/scribe.git
+cd scribe
+./install-uv.sh
+```
+
+The UV installation script will:
+1. ✅ Install UV package manager (if needed)
+2. ✅ Automatically download the correct Python version (3.11-3.13)
+3. ✅ Check and install system dependencies (FFmpeg, PortAudio)
+4. ✅ Install all Python packages (lightning fast!)
+5. ✅ Create configuration files
+6. ✅ Download the default speech model
+7. ✅ Set up everything for immediate use
+
+### Alternative: Traditional Installation
+
+If you prefer the traditional pip/venv approach:
 
 ```bash
 git clone https://github.com/Lastofthefirst/scribe.git
 cd scribe
 ./install.sh
 ```
-
-The installation script will:
-1. ✅ Check and install system dependencies (including FFmpeg, PortAudio)
-2. ✅ Install Python packages
-3. ✅ Create configuration files
-4. ✅ Download the default speech model
-5. ✅ Set up everything for immediate use
 
 > **Installation Issues?** See [INSTALL_TROUBLESHOOTING.md](INSTALL_TROUBLESHOOTING.md) for common problems and solutions.
 

@@ -1,5 +1,49 @@
 # Installation Troubleshooting
 
+## Python 3.14+ Not Supported
+
+If you see errors like:
+```
+ERROR: Cannot install scribe-stt because these package versions have conflicting dependencies.
+Additionally, some packages in these conflicts have no matching distributions available for your environment:
+    onnxruntime
+```
+
+**Problem**: Python 3.14 is too new - `onnxruntime` (required by faster-whisper) doesn't have pre-built wheels for Python 3.14+ yet.
+
+**Solution**: The install script will automatically detect this and try to use Python 3.11, 3.12, or 3.13 instead.
+
+### If Installation Script Fails
+
+If the script can't find a compatible Python version, install Python 3.11 manually:
+
+#### Debian/Ubuntu
+```bash
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv python3.11-dev
+
+# Verify installation
+python3.11 --version
+```
+
+Then run the install script again - it will automatically detect and use Python 3.11.
+
+### Manual Virtual Environment with Specific Python Version
+
+If you prefer to create the venv manually:
+```bash
+# Remove old venv if it exists
+rm -rf ~/.local/share/scribe-venv
+
+# Create new venv with Python 3.11
+python3.11 -m venv ~/.local/share/scribe-venv
+source ~/.local/share/scribe-venv/bin/activate
+
+# Install scribe
+cd scribe
+pip install -e .
+```
+
 ## FFmpeg Libraries Missing Error
 
 If you see errors like:

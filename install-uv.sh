@@ -1,6 +1,6 @@
 #!/bin/bash
-# Scribe Installation Script
-# Painless installation for KDE/Debian systems
+# Scribe Installation Script (UV-based)
+# Modern, fast installation using UV package manager
 
 set -e  # Exit on error
 
@@ -41,7 +41,7 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
-print_header "Scribe Installation"
+print_header "Scribe Installation (UV)"
 echo ""
 
 # Detect distribution
@@ -57,7 +57,7 @@ fi
 print_info "Detected: $PRETTY_NAME"
 echo ""
 
-# Check for supported distributions
+# Detect package manager
 case "$DISTRO" in
     debian|ubuntu|linuxmint|pop|kde-neon)
         PKG_MANAGER="apt"
@@ -81,59 +81,13 @@ echo ""
 
 DEPS_TO_INSTALL=()
 
-# Check Python 3.8-3.13 (3.14+ not yet supported by dependencies)
-PYTHON_CMD="python3"
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-    PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
-    PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-
-    if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 14 ]; then
-        print_warning "Python $PYTHON_VERSION found, but onnxruntime doesn't support 3.14+ yet"
-        print_info "Searching for Python 3.11, 3.12, or 3.13..."
-
-        # Try to find compatible Python version
-        for py_ver in python3.13 python3.12 python3.11; do
-            if command -v $py_ver &> /dev/null; then
-                PYTHON_CMD=$py_ver
-                PYTHON_VERSION=$($py_ver -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-                print_success "Found compatible $PYTHON_CMD ($PYTHON_VERSION)"
-                break
-            fi
-        done
-
-        # If no compatible version found, try to install python3.11
-        if [ "$PYTHON_CMD" = "python3" ]; then
-            print_warning "No compatible Python version found"
-            case "$PKG_MANAGER" in
-                apt)
-                    print_info "Will install python3.11"
-                    DEPS_TO_INSTALL+=("python3.11" "python3.11-venv" "python3.11-dev")
-                    PYTHON_CMD="python3.11"
-                    ;;
-                *)
-                    print_error "Please install Python 3.11, 3.12, or 3.13 manually"
-                    exit 1
-                    ;;
-            esac
-        fi
-    elif [ "$PYTHON_MAJOR" -ge 3 ] && [ "$PYTHON_MINOR" -ge 8 ]; then
-        print_success "Python $PYTHON_VERSION found"
-    else
-        print_error "Python 3.8+ required, found $PYTHON_VERSION"
-        DEPS_TO_INSTALL+=("python3")
-    fi
+# Check for UV
+if command -v uv &> /dev/null; then
+    UV_VERSION=$(uv --version | awk '{print $2}')
+    print_success "UV $UV_VERSION found"
 else
-    print_error "Python 3 not found"
-    DEPS_TO_INSTALL+=("python3")
-fi
-
-# Check pip
-if command -v pip3 &> /dev/null; then
-    print_success "pip3 found"
-else
-    print_warning "pip3 not found"
-    DEPS_TO_INSTALL+=("python3-pip")
+    print_warning "UV not found - will install"
+    INSTALL_UV=true
 fi
 
 # Check pkg-config (needed for library detection)
@@ -144,20 +98,20 @@ else
     DEPS_TO_INSTALL+=("pkg-config")
 fi
 
-# Check portaudio (required for sounddevice)
+# Check PortAudio (required for sounddevice)
 if command -v pkg-config &> /dev/null && pkg-config --exists portaudio-2.0; then
     print_success "PortAudio library found"
 else
     print_warning "PortAudio library not found"
     case "$PKG_MANAGER" in
         apt)
-            DEPS_TO_INSTALL+=("portaudio19-dev" "python3-dev")
+            DEPS_TO_INSTALL+=("portaudio19-dev")
             ;;
         dnf)
-            DEPS_TO_INSTALL+=("portaudio-devel" "python3-devel")
+            DEPS_TO_INSTALL+=("portaudio-devel")
             ;;
         pacman)
-            DEPS_TO_INSTALL+=("portaudio" "python")
+            DEPS_TO_INSTALL+=("portaudio")
             ;;
     esac
 fi
@@ -199,8 +153,6 @@ fi
 
 if [ "$TYPING_TOOL_FOUND" = false ]; then
     print_warning "No typing tool found (xdotool/ydotool/wtype)"
-
-    # Detect display server
     if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
         print_info "Wayland detected, will install ydotool"
         case "$PKG_MANAGER" in
@@ -247,7 +199,6 @@ done
 
 if [ "$AUDIO_TOOL_FOUND" = false ]; then
     print_warning "No audio playback tool found"
-    # pulseaudio-utils includes paplay
     case "$PKG_MANAGER" in
         apt)
             DEPS_TO_INSTALL+=("pulseaudio-utils")
@@ -291,114 +242,108 @@ fi
 
 echo ""
 
-# Step 2: Install Python package
-print_header "Step 2: Installing Scribe"
-echo ""
+# Step 2: Install UV if needed
+if [ "$INSTALL_UV" = true ]; then
+    print_header "Step 2: Installing UV"
+    echo ""
 
-# Create virtual environment (optional but recommended)
-read -p "Install in virtual environment? (recommended) [Y/n] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    print_info "Creating virtual environment with $PYTHON_CMD..."
+    print_info "Downloading and installing UV package manager..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    # Check if venv module exists for the selected Python version
-    if ! $PYTHON_CMD -m venv --help &> /dev/null; then
-        print_warning "venv module not found, installing..."
-        case "$PKG_MANAGER" in
-            apt)
-                if [ "$PYTHON_CMD" = "python3.11" ]; then
-                    sudo apt install -y python3.11-venv
-                elif [ "$PYTHON_CMD" = "python3.12" ]; then
-                    sudo apt install -y python3.12-venv
-                elif [ "$PYTHON_CMD" = "python3.13" ]; then
-                    sudo apt install -y python3.13-venv
-                else
-                    sudo apt install -y python3-venv
-                fi
-                ;;
-            dnf)
-                sudo dnf install -y python3-virtualenv
-                ;;
-            pacman)
-                # venv included in python package
-                ;;
-        esac
+    # Add UV to PATH for this session
+    export PATH="$HOME/.local/bin:$PATH"
+
+    if command -v uv &> /dev/null; then
+        UV_VERSION=$(uv --version | awk '{print $2}')
+        print_success "UV $UV_VERSION installed successfully"
+    else
+        print_error "UV installation failed"
+        exit 1
     fi
 
-    VENV_DIR="$HOME/.local/share/scribe-venv"
-    $PYTHON_CMD -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
-    print_success "Virtual environment created at $VENV_DIR using $PYTHON_CMD"
-
-    USE_VENV=true
-else
-    USE_VENV=false
+    echo ""
 fi
 
-# Upgrade pip
-print_info "Upgrading pip..."
-$PYTHON_CMD -m pip install --upgrade pip
-
-# Install scribe
-print_info "Installing Scribe and Python dependencies..."
-print_info "This may take a few minutes (downloading ML models)..."
+# Step 3: Install Scribe with UV
+print_header "Step 3: Installing Scribe"
 echo ""
 
-pip3 install -e .
+print_info "UV will automatically:"
+print_info "  • Download the correct Python version (3.11-3.13)"
+print_info "  • Create an optimized virtual environment"
+print_info "  • Install all dependencies (this may take a few minutes)"
+echo ""
+
+# UV will handle everything: Python version, venv, dependencies
+uv sync --frozen
 
 print_success "Scribe installed successfully"
 echo ""
 
-# Step 3: Create wrapper script if using venv
-if [ "$USE_VENV" = true ]; then
-    print_header "Step 3: Creating Launcher Script"
-    echo ""
+# Step 4: Create launcher script
+print_header "Step 4: Creating Launcher"
+echo ""
 
-    WRAPPER_SCRIPT="$HOME/.local/bin/scribe"
-    mkdir -p "$HOME/.local/bin"
+LAUNCHER_SCRIPT="$HOME/.local/bin/scribe"
+mkdir -p "$HOME/.local/bin"
 
-    cat > "$WRAPPER_SCRIPT" << EOF
+cat > "$LAUNCHER_SCRIPT" << 'EOF'
 #!/bin/bash
-# Scribe launcher script (auto-generated)
-source "$VENV_DIR/bin/activate"
-exec scribe "\$@"
+# Scribe launcher script (UV-based)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# Find the scribe project directory
+if [ -f "$PROJECT_DIR/pyproject.toml" ] && grep -q "scribe-stt" "$PROJECT_DIR/pyproject.toml"; then
+    cd "$PROJECT_DIR"
+    exec uv run scribe "$@"
+else
+    # Search for scribe installation
+    for dir in ~/ridvan/projects/scribe ~/.local/share/scribe ~/scribe; do
+        if [ -f "$dir/pyproject.toml" ] && grep -q "scribe-stt" "$dir/pyproject.toml"; then
+            cd "$dir"
+            exec uv run scribe "$@"
+        fi
+    done
+
+    echo "Error: Could not find scribe installation" >&2
+    exit 1
+fi
 EOF
 
-    chmod +x "$WRAPPER_SCRIPT"
-    print_success "Launcher script created at $WRAPPER_SCRIPT"
+chmod +x "$LAUNCHER_SCRIPT"
+print_success "Launcher script created at $LAUNCHER_SCRIPT"
 
-    # Check if ~/.local/bin is in PATH
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        print_warning "~/.local/bin is not in PATH"
-        print_info "Add this line to your ~/.bashrc or ~/.zshrc:"
-        echo ""
-        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
-        echo ""
-    fi
+# Check if ~/.local/bin is in PATH
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    echo ""
+    print_warning "~/.local/bin is not in PATH"
+    print_info "Add this line to your ~/.bashrc or ~/.zshrc:"
+    echo ""
+    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+    print_info "Then run: source ~/.bashrc (or restart your terminal)"
 fi
-
-# Step 4: Setup configuration
-print_header "Step 4: Configuration Setup"
-echo ""
-
-# Run setup command
-if [ "$USE_VENV" = true ]; then
-    source "$VENV_DIR/bin/activate"
-fi
-
-scribe setup
 
 echo ""
 
-# Step 5: Download default model
-print_header "Step 5: Download Speech Model"
+# Step 5: Setup configuration
+print_header "Step 5: Configuration Setup"
+echo ""
+
+uv run scribe setup
+
+echo ""
+
+# Step 6: Download default model
+print_header "Step 6: Download Speech Model"
 echo ""
 
 read -p "Download default model (tiny.en, ~39MB)? [Y/n] " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     print_info "Downloading model... (this may take a minute)"
-    scribe download
+    uv run scribe download
     print_success "Model downloaded"
 else
     print_info "Skipping model download (will download on first run)"
@@ -406,7 +351,7 @@ fi
 
 echo ""
 
-# Step 6: Final instructions
+# Final instructions
 print_header "Installation Complete!"
 echo ""
 
@@ -425,7 +370,6 @@ echo "  scribe --output clipboard  - Copy to clipboard instead of typing"
 echo ""
 print_info "Configuration:"
 echo "  Edit: ~/.config/scribe/config.toml"
-echo "  Example: $HOME/.config/scribe/config.example.toml"
 echo ""
 print_info "Keybinding Setup (KDE):"
 echo "  1. System Settings → Shortcuts → Custom Shortcuts"
@@ -437,5 +381,13 @@ echo "  1. Settings → Keyboard → Custom Shortcuts"
 echo "  2. Add new shortcut with command: 'scribe'"
 echo "  3. Set your preferred hotkey"
 echo ""
+
+# Check if PATH update needed
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    print_warning "Don't forget to add ~/.local/bin to your PATH!"
+    echo "  Run: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+    echo "  Then: source ~/.bashrc"
+    echo ""
+fi
 
 print_success "Happy transcribing! 🎤"
