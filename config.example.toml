@@ -1,0 +1,68 @@
+# Scribe Configuration File
+# Copy this to ~/.config/scribe/config.toml and customize
+
+[model]
+# Model size: tiny, tiny.en, base, base.en, small, small.en
+# For CPU use: tiny.en or base.en recommended
+size = "tiny.en"
+
+# Device: "cpu" or "cuda" (if you have NVIDIA GPU)
+device = "cpu"
+
+# Compute type: "int8", "float16", "float32"
+# int8 is fastest on CPU with minimal accuracy loss
+compute_type = "int8"
+
+[audio]
+# Sample rate in Hz (16000 is standard for Whisper)
+sample_rate = 16000
+
+# Channels: 1 for mono (recommended)
+channels = 1
+
+# VAD (Voice Activity Detection) aggressiveness: 0-3
+# 0 = least aggressive, 3 = most aggressive
+# Higher values detect silence faster but may cut off speech
+vad_aggressiveness = 3
+
+# Silence duration in seconds before stopping recording
+# Android/iPhone typically use 1.5-2.0 seconds
+silence_duration = 1.5
+
+# Minimum audio duration in seconds (to avoid accidental triggers)
+min_audio_duration = 0.5
+
+[output]
+# Output mode: "type" (type at cursor) or "clipboard"
+mode = "type"
+
+# For "type" mode: delay between characters in seconds
+# 0 = instant, 0.001-0.01 = gradual typing effect
+typing_delay = 0.0
+
+# Automatically press Enter after typing (true/false)
+auto_enter = false
+
+[notifications]
+# Show desktop notification when recording starts (true/false)
+show_notification = true
+
+# Play bell sound when recording starts (true/false)
+play_bell = true
+
+# Bell sound: "system" or path to custom sound file
+bell_sound = "system"
+
+# Notification timeout in milliseconds (0 = default)
+notification_timeout = 3000
+
+[advanced]
+# Keep model loaded in memory for faster subsequent runs (true/false)
+# Uses ~200MB RAM but reduces startup time from ~2s to instant
+keep_model_loaded = false
+
+# Daemon mode: run scribe as background service (true/false)
+daemon_mode = false
+
+# Log level: "DEBUG", "INFO", "WARNING", "ERROR"
+log_level = "INFO"

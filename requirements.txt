@@ -1,0 +1,13 @@
+# Core dependencies
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+webrtcvad>=2.0.10
+pyperclip>=1.8.2
+toml>=0.10.2
+click>=8.1.0
+
+# Development dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1

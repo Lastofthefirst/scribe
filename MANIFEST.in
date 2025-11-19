@@ -1,0 +1,9 @@
+# Include additional files in distribution
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include requirements.txt
+include config.example.toml
+include install.sh
+recursive-include tests *.py
