@@ -92,11 +92,16 @@ impl StreamingRecorder {
         let mut transcribed_text: Vec<String> = Vec::new();
 
         let mut silence_start: Option<Instant> = None;
-        let mut last_speech_time = Instant::now();  // Track when speech last occurred (for final pause)
+        let mut last_speech_time: Option<Instant> = None;  // Track when speech last occurred (for final pause)
         let recording_start = Instant::now();
         let mut speech_detected = false;
 
-        let mut frame_buffer: VecDeque<bool> = VecDeque::with_capacity(2);
+        // Rolling buffer for VAD debouncing (10 frames)
+        let mut vad_buffer: VecDeque<bool> = VecDeque::with_capacity(10);
+
+        // Continuous silence counter
+        let mut continuous_silence_frames = 0;
+        const SILENCE_FRAMES_THRESHOLD: u32 = 5;  // Require 5 consecutive silence frames to start timer
 
         loop {
             // Get audio frames from buffer
@@ -116,29 +121,36 @@ impl StreamingRecorder {
                     current_chunk.extend_from_slice(chunk);
                     total_audio.extend_from_slice(chunk);
 
-                    // Check for speech
+                    // Check for speech with VAD
                     let is_speech = audio_recorder.is_speech(chunk);
-                    frame_buffer.push_back(is_speech);
-                    if frame_buffer.len() > 2 {
-                        frame_buffer.pop_front();
-                    }
+                    vad_buffer.push_back(is_speech);
 
-                    // Use majority vote
-                    let speech_in_buffer = frame_buffer.iter().filter(|&&x| x).count() > frame_buffer.len() / 2;
-
-                    if speech_in_buffer {
-                        speech_detected = true;
-                        last_speech_time = Instant::now();  // Update when speech is detected
-                        silence_start = None;
+                    // Use majority vote from VAD buffer (debouncing)
+                    let is_speech_smoothed = if vad_buffer.len() >= 5 {
+                        let speech_count = vad_buffer.iter().filter(|&&x| x).count();
+                        speech_count as f64 / vad_buffer.len() as f64 > 0.5
                     } else {
-                        // Silence detected
-                        if speech_detected && silence_start.is_none() {
+                        is_speech
+                    };
+
+                    if is_speech_smoothed {
+                        // Speech detected
+                        speech_detected = true;
+                        last_speech_time = Some(Instant::now());
+                        silence_start = None;
+                        continuous_silence_frames = 0;
+                    } else {
+                        // Silence frame detected
+                        continuous_silence_frames += 1;
+
+                        // Only start silence timer after multiple consecutive silence frames
+                        if speech_detected && silence_start.is_none() && continuous_silence_frames >= SILENCE_FRAMES_THRESHOLD {
                             silence_start = Some(Instant::now());
+                            log::debug!("Silence started after {} continuous frames", continuous_silence_frames);
                         }
 
                         if let Some(start) = silence_start {
                             let silence_duration = start.elapsed().as_secs_f64();
-                            let time_since_last_speech = last_speech_time.elapsed().as_secs_f64();
 
                             // Check for chunk pause (transcribe but continue recording)
                             if silence_duration >= self.chunk_pause && !current_chunk.is_empty() {
@@ -185,14 +197,21 @@ impl StreamingRecorder {
                                     }
 
                                     current_chunk.clear();
-                                    silence_start = Some(Instant::now());  // Reset for next chunk, but keep last_speech_time
+                                    // Don't reset silence_start - keep tracking for final pause
                                 }
                             }
 
-                            // Check for final pause (end recording) - use time since LAST SPEECH, not current silence
-                            if time_since_last_speech >= self.final_pause {
-                                info!("Final pause detected ({:.1}s since last speech), ending recording", time_since_last_speech);
-                                break;
+                            // Check for final pause (end recording)
+                            // Only end if we have detected speech AND have transcribed something
+                            if last_speech_time.is_some() && silence_duration >= self.final_pause {
+                                // Additional check: only end if we've transcribed at least one chunk
+                                if !transcribed_text.is_empty() {
+                                    let time_since_last_speech = last_speech_time.unwrap().elapsed().as_secs_f64();
+                                    info!("Final pause detected ({:.1}s since last speech), ending recording", time_since_last_speech);
+                                    break;
+                                } else {
+                                    log::debug!("Silence detected but no content transcribed yet, continuing...");
+                                }
                             }
                         }
                     }

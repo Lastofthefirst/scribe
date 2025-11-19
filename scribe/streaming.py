@@ -58,10 +58,18 @@ class StreamingRecorder:
 
         current_chunk = []
         silence_start = None
-        last_speech_time = time.time()  # Track when speech last occurred (for final pause)
+        last_speech_time = None  # Track when speech last occurred (for final pause)
         last_chunk_time = time.time()
         recording_start = time.time()
         speech_detected = False
+
+        # Rolling buffer for VAD debouncing (10 frames)
+        from collections import deque
+        vad_buffer = deque(maxlen=10)
+
+        # Continuous silence counter
+        continuous_silence_frames = 0
+        SILENCE_FRAMES_THRESHOLD = 5  # Require 5 consecutive silence frames to start timer
 
         try:
             with sd.InputStream(
@@ -81,22 +89,35 @@ class StreamingRecorder:
                     current_chunk.append(audio_chunk.copy())
                     self.total_audio.append(audio_chunk.copy())
 
-                    # Check for speech
+                    # Check for speech with VAD
                     audio_bytes = audio_chunk.tobytes()
                     is_speech = self._is_speech(audio_bytes)
+                    vad_buffer.append(is_speech)
 
-                    if is_speech:
-                        speech_detected = True
-                        last_speech_time = time.time()  # Update when speech is detected
-                        silence_start = None
+                    # Use majority vote from VAD buffer (debouncing)
+                    if len(vad_buffer) >= 5:
+                        speech_ratio = sum(vad_buffer) / len(vad_buffer)
+                        is_speech_smoothed = speech_ratio > 0.5
                     else:
-                        # Silence detected
-                        if speech_detected and silence_start is None:
+                        is_speech_smoothed = is_speech
+
+                    if is_speech_smoothed:
+                        # Speech detected
+                        speech_detected = True
+                        last_speech_time = time.time()
+                        silence_start = None
+                        continuous_silence_frames = 0
+                    else:
+                        # Silence frame detected
+                        continuous_silence_frames += 1
+
+                        # Only start silence timer after multiple consecutive silence frames
+                        if speech_detected and silence_start is None and continuous_silence_frames >= SILENCE_FRAMES_THRESHOLD:
                             silence_start = time.time()
+                            logger.debug(f"Silence started after {continuous_silence_frames} continuous frames")
 
                         if silence_start:
                             silence_duration = time.time() - silence_start
-                            time_since_last_speech = time.time() - last_speech_time
 
                             # Check for chunk pause (transcribe but continue recording)
                             if silence_duration >= self.chunk_pause and len(current_chunk) > 0:
@@ -119,12 +140,18 @@ class StreamingRecorder:
                                         )
 
                                 current_chunk = []
-                                silence_start = time.time()  # Reset for next chunk, but keep last_speech_time
+                                # Don't reset silence_start - keep tracking for final pause
 
-                            # Check for final pause (end recording) - use time since LAST SPEECH, not current silence
-                            if time_since_last_speech >= self.final_pause:
-                                logger.info(f"Final pause detected ({time_since_last_speech:.1f}s since last speech), ending recording")
-                                break
+                            # Check for final pause (end recording)
+                            # Only end if we have detected speech AND have transcribed something
+                            if last_speech_time is not None and silence_duration >= self.final_pause:
+                                # Additional check: only end if we've transcribed at least one chunk
+                                if len(self.transcribed_text) > 0:
+                                    time_since_last_speech = time.time() - last_speech_time
+                                    logger.info(f"Final pause detected ({time_since_last_speech:.1f}s since last speech), ending recording")
+                                    break
+                                else:
+                                    logger.debug(f"Silence detected but no content transcribed yet, continuing...")
 
                     # Check for maximum duration timeout
                     elapsed_time = time.time() - recording_start
