@@ -2,12 +2,12 @@
 
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, SampleFormat, Stream, StreamConfig};
+use cpal::{Device, StreamConfig};
 use log::{debug, info, warn};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use webrtc_vad::{SampleRate, Vad};
+use webrtc_vad::{SampleRate, Vad, VadMode};
 
 /// Audio recorder with voice activity detection.
 pub struct AudioRecorder {
@@ -50,7 +50,16 @@ impl AudioRecorder {
         // Create VAD
         let mut vad = Vad::new();
         vad.set_sample_rate(vad_sample_rate);
-        vad.set_mode(vad_aggressiveness.try_into().context("VAD aggressiveness must be 0-3")?);
+
+        // Convert aggressiveness level to VadMode
+        let vad_mode = match vad_aggressiveness {
+            0 => VadMode::Quality,
+            1 => VadMode::LowBitrate,
+            2 => VadMode::Aggressive,
+            3 => VadMode::VeryAggressive,
+            _ => anyhow::bail!("VAD aggressiveness must be 0-3, got {}", vad_aggressiveness),
+        };
+        vad.set_mode(vad_mode);
 
         // Frame duration for VAD (30ms - must be 10, 20, or 30ms)
         let frame_duration_ms = 30;
@@ -77,8 +86,8 @@ impl AudioRecorder {
     pub fn is_speech(&mut self, audio_frame: &[i16]) -> bool {
         match self.vad.is_voice_segment(audio_frame) {
             Ok(is_speech) => is_speech,
-            Err(e) => {
-                debug!("VAD error: {}", e);
+            Err(_) => {
+                debug!("VAD error: invalid frame length");
                 false
             }
         }

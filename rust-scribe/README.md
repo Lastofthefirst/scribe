@@ -149,6 +149,42 @@ If you prefer to install manually or the script fails, see [BUILD.md](BUILD.md) 
 ./target/release/scribe --output clipboard
 ```
 
+### Keybinding Setup
+
+#### KDE Plasma
+
+1. Open **System Settings** → **Shortcuts** → **Custom Shortcuts**
+2. Click **Edit** → **New** → **Global Shortcut** → **Command/URL**
+3. Name it "Scribe Voice Input (Rust)"
+4. Set **Trigger**: Choose your preferred key (e.g., `Meta+S` or `Ctrl+Shift+S`)
+5. Set **Action** (choose one):
+   - **Streaming mode (recommended)**: `bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && scribe-rust --stream"`
+   - **Standard mode**: `bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && scribe-rust"`
+   - **Clipboard mode**: `bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && scribe-rust --output clipboard"`
+6. Click **Apply**
+
+> **Note**: The `bash -c` wrapper is needed to ensure PATH is set correctly when triggered by keybindings.
+
+#### GNOME
+
+1. Open **Settings** → **Keyboard** → **Keyboard Shortcuts**
+2. Scroll to bottom and click **+** (Add Custom Shortcut)
+3. Name: `Scribe Voice Input (Rust Streaming)`
+4. Command: `bash -c "export PATH=\"$HOME/.local/bin:$PATH\" && scribe-rust --stream"`
+5. Set your preferred shortcut
+6. Click **Add**
+
+> **Note**: Use `--output clipboard` instead of `--stream` if you prefer clipboard mode.
+
+#### Other Desktop Environments
+
+Most desktop environments support custom keybindings. Look for:
+- **XFCE**: Settings → Keyboard → Application Shortcuts
+- **Cinnamon**: System Settings → Keyboard → Shortcuts
+- **MATE**: System → Preferences → Hardware → Keyboard Shortcuts
+
+The command to use is: `bash -c "export PATH=\"$HOME/.local/bin:$PATH\" && scribe-rust --stream"`
+
 ## Architecture
 
 ```

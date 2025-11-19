@@ -1,7 +1,7 @@
 // Speech transcription using whisper.cpp via whisper-rs.
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::info;
 use std::path::PathBuf;
 use std::time::Instant;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};

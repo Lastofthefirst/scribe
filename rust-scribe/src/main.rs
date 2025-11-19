@@ -240,7 +240,7 @@ fn test_system(config: &Config) -> Result<()> {
     let mut audio_recorder = AudioRecorder::new(
         config.audio.sample_rate,
         config.audio.channels as u16,
-        config.audio.vad_aggressiveness,
+        config.audio.vad_aggressiveness as i32,
         config.audio.silence_duration,
         config.audio.min_audio_duration,
     )?;
