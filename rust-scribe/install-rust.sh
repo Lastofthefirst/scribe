@@ -124,6 +124,14 @@ install_system_deps() {
         fi
     fi
 
+    # Check cmake (required for whisper-rs build)
+    if command_exists cmake; then
+        print_success "cmake found"
+    else
+        print_warning "cmake not found (required for whisper-rs)"
+        missing_deps+=("cmake")
+    fi
+
     # Check for typing tools
     if command_exists dotool; then
         print_success "dotool found (Wayland typing tool)"

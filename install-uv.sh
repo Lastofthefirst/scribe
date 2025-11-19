@@ -229,7 +229,7 @@ create_launcher() {
 #!/bin/bash
 # Scribe launcher script
 source "$install_dir/.venv/bin/activate"
-exec python -m scribe "\$@"
+exec scribe "\$@"
 EOF
 
     chmod +x "$launcher"

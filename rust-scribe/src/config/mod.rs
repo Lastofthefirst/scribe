@@ -32,6 +32,8 @@ pub struct AudioConfig {
     pub vad_aggressiveness: u8,
     #[serde(default = "default_silence_duration")]
     pub silence_duration: f64,
+    #[serde(default = "default_min_audio_duration")]
+    pub min_audio_duration: f64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -50,6 +52,8 @@ pub struct NotificationsConfig {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub audio_bell: bool,
+    #[serde(default = "default_bell_sound")]
+    pub bell_sound: String,
     #[serde(default = "default_notification_timeout")]
     pub timeout: u32,
 }
@@ -58,6 +62,8 @@ pub struct NotificationsConfig {
 pub struct AdvancedConfig {
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default)]
+    pub keep_model_loaded: bool,
 }
 
 // Default values
@@ -82,11 +88,17 @@ fn default_vad_aggressiveness() -> u8 {
 fn default_silence_duration() -> f64 {
     1.5
 }
+fn default_min_audio_duration() -> f64 {
+    0.3
+}
 fn default_mode() -> String {
     "type".to_string()
 }
 fn default_true() -> bool {
     true
+}
+fn default_bell_sound() -> String {
+    "system".to_string()
 }
 fn default_notification_timeout() -> u32 {
     3000
@@ -108,6 +120,7 @@ impl Default for Config {
                 channels: default_channels(),
                 vad_aggressiveness: default_vad_aggressiveness(),
                 silence_duration: default_silence_duration(),
+                min_audio_duration: default_min_audio_duration(),
             },
             output: OutputConfig {
                 mode: default_mode(),
@@ -117,6 +130,7 @@ impl Default for Config {
             notifications: NotificationsConfig {
                 enabled: true,
                 audio_bell: true,
+                bell_sound: default_bell_sound(),
                 timeout: default_notification_timeout(),
             },
             advanced: AdvancedConfig::default(),

@@ -7,7 +7,7 @@ use log::{debug, info, warn};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use webrtcvad::{SampleRate, Vad};
+use webrtc_vad::{SampleRate, Vad};
 
 /// Audio recorder with voice activity detection.
 pub struct AudioRecorder {

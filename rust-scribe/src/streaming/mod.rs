@@ -219,8 +219,12 @@ impl StreamingRecorder {
             }
 
             // Break outer loop if we broke from inner loop
-            if silence_start.is_some() && last_speech_time.elapsed().as_secs_f64() >= self.final_pause {
-                break;
+            if silence_start.is_some() {
+                if let Some(last_speech) = last_speech_time {
+                    if last_speech.elapsed().as_secs_f64() >= self.final_pause {
+                        break;
+                    }
+                }
             }
 
             // Check for maximum duration timeout

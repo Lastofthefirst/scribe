@@ -66,7 +66,7 @@ fn run_standard(config: &Config) -> Result<()> {
     let mut audio_recorder = AudioRecorder::new(
         config.audio.sample_rate,
         config.audio.channels as u16,
-        config.audio.vad_aggressiveness,
+        config.audio.vad_aggressiveness as i32,
         config.audio.silence_duration,
         config.audio.min_audio_duration,
     )?;
@@ -135,7 +135,7 @@ fn run_streaming(config: &Config) -> Result<()> {
     let mut audio_recorder = AudioRecorder::new(
         config.audio.sample_rate,
         config.audio.channels as u16,
-        config.audio.vad_aggressiveness,
+        config.audio.vad_aggressiveness as i32,
         config.audio.silence_duration,
         config.audio.min_audio_duration,
     )?;
@@ -266,7 +266,7 @@ fn test_system(config: &Config) -> Result<()> {
         config.output.typing_delay,
         config.output.auto_enter,
     );
-    if let Some(ref tool) = output_handler.typing_tool {
+    if let Some(tool) = output_handler.get_typing_tool() {
         println!("✓ Typing tool available: {}\n", tool);
     } else {
         println!("⚠ No typing tool found (will use clipboard mode)\n");

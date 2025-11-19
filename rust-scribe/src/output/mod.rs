@@ -25,6 +25,10 @@ impl OutputHandler {
         }
     }
 
+    pub fn get_typing_tool(&self) -> Option<&String> {
+        self.typing_tool.as_ref()
+    }
+
     fn detect_typing_tool() -> Option<String> {
         // Detect display server
         let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default().to_lowercase();
