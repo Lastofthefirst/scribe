@@ -114,7 +114,7 @@ install_system_deps() {
         missing_deps+=("ffmpeg" "libavcodec-dev" "libavformat-dev" "libavdevice-dev" "libavutil-dev" "libavfilter-dev" "libswscale-dev" "libswresample-dev")
     fi
 
-    # Check for typing tools (Wayland preferred)
+    # Check for typing tools
     if command_exists dotool; then
         print_success "dotool found (Wayland typing tool)"
         typing_tool_found=true
@@ -122,7 +122,7 @@ install_system_deps() {
         print_success "kdotool found (KDE typing tool)"
         typing_tool_found=true
     elif command_exists xdotool; then
-        print_success "xdotool found (X11 typing tool)"
+        print_success "xdotool found (X11/XWayland typing tool)"
         typing_tool_found=true
     elif command_exists ydotool; then
         print_success "ydotool found (Universal typing tool)"
@@ -132,16 +132,9 @@ install_system_deps() {
         typing_tool_found=true
     else
         print_warning "No typing tool found"
-
-        # Detect session type
-        if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-            print_info "Wayland detected - will install dotool"
-            # dotool needs to be compiled from source or installed via cargo
-            print_info "dotool will be installed via cargo (Rust package manager)"
-        else
-            print_info "X11 detected - will install xdotool"
-            missing_deps+=("xdotool")
-        fi
+        # xdotool works on both X11 and Wayland (via XWayland)
+        print_info "Will install xdotool (works on X11 and Wayland via XWayland)"
+        missing_deps+=("xdotool")
     fi
 
     # Check notification tools
@@ -189,35 +182,6 @@ install_system_deps() {
             exit 1
         fi
     fi
-
-    # Install dotool if Wayland and no typing tool
-    if [ "$XDG_SESSION_TYPE" = "wayland" ] && [ "$typing_tool_found" = false ]; then
-        install_dotool
-    fi
-}
-
-# Install dotool (Wayland typing tool)
-install_dotool() {
-    print_info "Installing dotool (Wayland typing tool)..."
-
-    # Check if cargo is installed
-    if ! command_exists cargo; then
-        print_info "Installing Rust (required for dotool)..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-    fi
-
-    # Install dotool
-    cargo install dotool
-
-    # Add cargo bin to PATH if not already there
-    if [[ ":$PATH:" != *":$HOME/.cargo/bin:"* ]]; then
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.bashrc"
-        export PATH="$HOME/.cargo/bin:$PATH"
-    fi
-
-    print_success "dotool installed"
-    print_warning "You may need to configure udev rules for dotool. See: https://github.com/dotool/dotool"
 }
 
 # Create Python virtual environment and install dependencies

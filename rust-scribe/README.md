@@ -91,25 +91,38 @@
 - **No runtime overhead**: Zero-cost abstractions
 - **Memory safety**: No garbage collector pauses
 
-## Building
+## Installation
 
-See [BUILD.md](BUILD.md) for detailed build instructions.
-
-**Quick start:**
+### One-Command Installation (Recommended)
 
 ```bash
-# Install system dependencies (Debian/Ubuntu)
-sudo apt-get install libasound2-dev pkg-config
+# Clone the repository (if you haven't already)
+git clone https://github.com/Lastofthefirst/scribe.git
+cd scribe/rust-scribe
 
-# Build release version
-cd rust-scribe
-cargo build --release
+# Run the install script
+./install-rust.sh
 
-# Install models
-mkdir -p ~/.cache/scribe/models
-wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin \
-     -O ~/.cache/scribe/models/ggml-tiny.en.bin
+# Reload your PATH (or restart terminal)
+source ~/.bashrc
+
+# Start using Scribe!
+scribe-rust --stream
 ```
+
+**The install script will:**
+- ✅ Install Rust toolchain if missing (rustup)
+- ✅ Check and install all system dependencies (ALSA, pkg-config, xdotool)
+- ✅ Build optimized release binary with cargo
+- ✅ Download GGML models (ggml-tiny.en.bin)
+- ✅ Create `~/.local/bin/scribe-rust` launcher
+- ✅ Add to PATH automatically
+- ✅ Set up configuration
+- ✅ Ready to use!
+
+### Manual Installation
+
+If you prefer to install manually or the script fails, see [BUILD.md](BUILD.md) for detailed build instructions.
 
 ## Usage
 
