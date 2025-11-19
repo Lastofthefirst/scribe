@@ -135,22 +135,22 @@ class OutputHandler:
             True if successful, False otherwise.
         """
         try:
-            # Small delay to ensure focus is correct
-            time.sleep(0.1)
+            # Longer delay to ensure window has focus after notification
+            time.sleep(0.5)
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)
                 for char in text:
                     subprocess.run(
-                        ["xdotool", "type", "--", char],
+                        ["xdotool", "type", "--clearmodifiers", "--", char],
                         check=True,
                         capture_output=True,
                     )
                     time.sleep(self.typing_delay)
             else:
-                # Type all at once
+                # Type all at once with clearmodifiers to avoid stuck keys
                 subprocess.run(
-                    ["xdotool", "type", "--", text],
+                    ["xdotool", "type", "--clearmodifiers", "--", text],
                     check=True,
                     capture_output=True,
                 )
@@ -167,7 +167,7 @@ class OutputHandler:
             return True
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"xdotool error: {e.stderr.decode()}")
+            logger.error(f"xdotool error: {e.stderr.decode() if e.stderr else str(e)}")
             return False
 
     def _type_with_ydotool(self, text: str) -> bool:

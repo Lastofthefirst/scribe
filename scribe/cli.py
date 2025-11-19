@@ -11,6 +11,7 @@ from scribe.audio import AudioRecorder
 from scribe.transcribe import Transcriber
 from scribe.output import OutputHandler
 from scribe.notifications import NotificationHandler
+from scribe.streaming import StreamingRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,22 @@ class Scribe:
 
         logger.info("Scribe initialized successfully")
 
-    def run(self) -> int:
+    def run(self, streaming: bool = False) -> int:
         """Run speech-to-text recording and transcription.
+
+        Args:
+            streaming: Enable streaming mode (real-time transcription).
+
+        Returns:
+            Exit code (0 for success, 1 for error).
+        """
+        if streaming:
+            return self.run_streaming()
+        else:
+            return self.run_standard()
+
+    def run_standard(self) -> int:
+        """Run standard mode: record all, then transcribe.
 
         Returns:
             Exit code (0 for success, 1 for error).
@@ -113,15 +128,56 @@ class Scribe:
             self.notification_handler.notify_error(f"Error: {e}")
             return 1
 
+    def run_streaming(self) -> int:
+        """Run streaming mode: transcribe and output in real-time.
+
+        Returns:
+            Exit code (0 for success, 1 for error).
+        """
+        try:
+            # Notify recording start
+            self.notification_handler.notify_recording_started()
+
+            # Create streaming recorder
+            streamer = StreamingRecorder(
+                self.audio_recorder,
+                self.transcriber,
+                self.output_handler,
+                chunk_pause=0.8,  # Short pause to trigger chunk transcription
+                final_pause=2.0,  # Long pause to end recording
+            )
+
+            # Record and transcribe in real-time
+            logger.info("Starting streaming mode...")
+            transcription = streamer.record_and_transcribe_streaming()
+
+            if not transcription:
+                logger.warning("No transcription generated")
+                self.notification_handler.notify_error("No speech detected")
+                return 1
+
+            logger.info(f"Complete transcription: {transcription}")
+            self.notification_handler.notify_transcription_complete(transcription)
+            return 0
+
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user")
+            return 130
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}", exc_info=True)
+            self.notification_handler.notify_error(f"Error: {e}")
+            return 1
+
 
 @click.group(invoke_without_command=True)
 @click.option("--config", "-c", type=click.Path(), help="Path to configuration file")
 @click.option("--output", "-o", type=click.Choice(["type", "clipboard"]), help="Output mode")
 @click.option("--model", "-m", help="Model size (tiny.en, base.en, etc.)")
+@click.option("--stream", "-s", is_flag=True, help="Enable streaming mode (real-time transcription)")
 @click.option("--no-notification", is_flag=True, help="Disable notifications")
 @click.option("--no-bell", is_flag=True, help="Disable bell sound")
 @click.pass_context
-def cli(ctx, config, output, model, no_notification, no_bell):
+def cli(ctx, config, output, model, stream, no_notification, no_bell):
     """Scribe - Fast, local speech-to-text for KDE/Debian.
 
     Run without arguments to start recording with voice activity detection.
@@ -129,6 +185,7 @@ def cli(ctx, config, output, model, no_notification, no_bell):
 
     Examples:
         scribe                    # Record and transcribe with VAD
+        scribe --stream           # Streaming mode (text appears as you speak!)
         scribe --output clipboard # Output to clipboard instead of typing
         scribe --model base.en    # Use base.en model for better accuracy
         scribe test               # Test audio recording
@@ -155,7 +212,7 @@ def cli(ctx, config, output, model, no_notification, no_bell):
             scribe_app.notification_handler.play_bell = False
 
         # Run the application
-        exit_code = scribe_app.run()
+        exit_code = scribe_app.run(streaming=stream)
         sys.exit(exit_code)
 
 
