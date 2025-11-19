@@ -234,6 +234,8 @@ install_ydotool() {
 
     # Clone ydotool
     local ydotool_dir="/tmp/ydotool-build-$$"
+    local original_dir="$(pwd)"
+
     print_info "Cloning ydotool repository..."
     git clone https://github.com/ReimuNotMoe/ydotool.git "$ydotool_dir"
 
@@ -250,7 +252,8 @@ install_ydotool() {
     print_info "Installing ydotool to ~/.local..."
     make install
 
-    cd "$OLDPWD"
+    # Return to original directory and cleanup
+    cd "$original_dir"
     rm -rf "$ydotool_dir"
 
     # Set up ydotoold systemd service for user
@@ -272,6 +275,25 @@ Environment=DISPLAY=:0
 WantedBy=default.target
 EOF
 
+    # Set up udev rules for /dev/uinput access
+    print_info "Setting up udev rules for /dev/uinput access..."
+    sudo tee /etc/udev/rules.d/80-uinput.rules > /dev/null <<'EOF'
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+EOF
+
+    # Add user to input group
+    print_info "Adding user to 'input' group..."
+    sudo usermod -aG input "$USER"
+
+    # Reload udev rules
+    print_info "Reloading udev rules..."
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+
+    # Load uinput module
+    print_info "Loading uinput kernel module..."
+    sudo modprobe uinput
+
     # Enable and start the service
     systemctl --user daemon-reload
     systemctl --user enable ydotool.service
@@ -284,10 +306,12 @@ EOF
         print_success "ydotool installed and daemon started successfully"
         print_info "ydotool and ydotoold are now available in ~/.local/bin"
     else
-        print_warning "ydotool installed but daemon failed to start"
-        print_info "You may need to start it manually: systemctl --user start ydotool.service"
-        print_info "Or run: ydotoold (requires sudo/root for /dev/uinput access)"
+        print_warning "ydotool daemon may need a reboot to access /dev/uinput"
+        print_info "After rebooting, the daemon will start automatically"
+        print_info "Or manually start: systemctl --user start ydotool.service"
     fi
+
+    print_warning "NOTE: You may need to log out and back in for group changes to take effect"
 }
 
 # Create Python virtual environment and install dependencies
