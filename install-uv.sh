@@ -184,6 +184,112 @@ install_system_deps() {
     fi
 }
 
+# Build and install ydotool (universal typing tool for Wayland/X11)
+install_ydotool() {
+    print_header "Checking ydotool"
+
+    # Check if ydotool is already available
+    if command_exists ydotool && command_exists ydotoold; then
+        print_success "ydotool already installed"
+        return 0
+    fi
+
+    print_info "ydotool not found - building from source..."
+    print_info "This is a universal typing tool that works on Wayland and X11"
+
+    # Check for required build dependencies
+    local build_deps=()
+
+    if ! command_exists cmake; then
+        build_deps+=("cmake")
+    fi
+
+    if ! command_exists git; then
+        build_deps+=("git")
+    fi
+
+    # scdoc is optional for man pages
+    if ! command_exists scdoc; then
+        if [ "$OS" = "debian" ] || [ "$OS" = "ubuntu" ]; then
+            build_deps+=("scdoc")
+        elif [ "$OS" = "fedora" ]; then
+            build_deps+=("scdoc")
+        elif [ "$OS" = "arch" ]; then
+            build_deps+=("scdoc")
+        fi
+    fi
+
+    # Install build dependencies if needed
+    if [ ${#build_deps[@]} -gt 0 ]; then
+        print_info "Installing build dependencies: ${build_deps[*]}"
+        if [ "$OS" = "debian" ] || [ "$OS" = "ubuntu" ]; then
+            sudo apt-get update
+            sudo apt-get install -y "${build_deps[@]}"
+        elif [ "$OS" = "fedora" ]; then
+            sudo dnf install -y "${build_deps[@]}"
+        elif [ "$OS" = "arch" ]; then
+            sudo pacman -S --noconfirm "${build_deps[@]}"
+        fi
+    fi
+
+    # Clone ydotool
+    local ydotool_dir="/tmp/ydotool-build-$$"
+    print_info "Cloning ydotool repository..."
+    git clone https://github.com/ReimuNotMoe/ydotool.git "$ydotool_dir"
+
+    cd "$ydotool_dir"
+
+    # Build ydotool
+    print_info "Building ydotool..."
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+    make -j "$(nproc)"
+
+    # Install to ~/.local
+    print_info "Installing ydotool to ~/.local..."
+    make install
+
+    cd "$OLDPWD"
+    rm -rf "$ydotool_dir"
+
+    # Set up ydotoold systemd service for user
+    print_info "Setting up ydotoold systemd user service..."
+    mkdir -p "$HOME/.config/systemd/user"
+
+    cat > "$HOME/.config/systemd/user/ydotool.service" <<'EOF'
+[Unit]
+Description=ydotool daemon
+Documentation=https://github.com/ReimuNotMoe/ydotool
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=%h/.local/bin/ydotoold
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target
+EOF
+
+    # Enable and start the service
+    systemctl --user daemon-reload
+    systemctl --user enable ydotool.service
+    systemctl --user start ydotool.service
+
+    # Wait a moment for the service to start
+    sleep 2
+
+    if systemctl --user is-active --quiet ydotool.service; then
+        print_success "ydotool installed and daemon started successfully"
+        print_info "ydotool and ydotoold are now available in ~/.local/bin"
+    else
+        print_warning "ydotool installed but daemon failed to start"
+        print_info "You may need to start it manually: systemctl --user start ydotool.service"
+        print_info "Or run: ydotoold (requires sudo/root for /dev/uinput access)"
+    fi
+}
+
 # Create Python virtual environment and install dependencies
 install_python_deps() {
     print_header "Installing Python Dependencies"
@@ -280,6 +386,9 @@ main() {
 
     # Install system dependencies
     install_system_deps
+
+    # Install ydotool if no typing tool found
+    install_ydotool
 
     # Install Python dependencies
     install_python_deps
