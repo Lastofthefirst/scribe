@@ -152,11 +152,13 @@ class StreamingRecorder:
                 audio_data = audio_data.squeeze()
 
             # Skip if too short
-            if len(audio_data) < self.sample_rate * 0.3:
+            duration = len(audio_data) / self.sample_rate
+            if duration < 0.3:
+                logger.debug(f"Skipping short chunk: {duration:.2f}s")
                 return
 
             # Transcribe chunk
-            logger.debug(f"Transcribing chunk: {len(audio_data)} samples")
+            logger.info(f"Transcribing chunk: {len(audio_data)} samples ({duration:.2f}s)")
             text = self.transcriber.transcribe(
                 audio_data,
                 sample_rate=self.sample_rate,
@@ -171,7 +173,15 @@ class StreamingRecorder:
                 self.transcribed_text.append(text.strip())
 
                 # Output immediately
-                self.output_handler.output(text)
+                logger.info(f"Outputting chunk text...")
+                success = self.output_handler.output(text)
+                if success:
+                    logger.info(f"Chunk output successful")
+                else:
+                    logger.error(f"Chunk output failed!")
+
+            else:
+                logger.warning("Chunk transcription produced no text")
 
         except Exception as e:
-            logger.error(f"Chunk transcription error: {e}")
+            logger.error(f"Chunk transcription error: {e}", exc_info=True)

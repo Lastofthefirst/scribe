@@ -289,6 +289,97 @@ def test(config):
 
 @cli.command()
 @click.option("--config", "-c", type=click.Path(), help="Path to configuration file")
+def test_typing(config):
+    """Test typing functionality with xdotool/ydotool.
+
+    This will type a test message to verify that text output is working.
+    Make sure to focus a text editor or terminal before running this command!
+    """
+    import time
+
+    cfg = Config(config_path=config)
+    output_handler = OutputHandler(mode="type")
+
+    click.echo("Testing typing functionality...")
+    click.echo(f"Detected typing tool: {output_handler.typing_tool}")
+    click.echo("\n⚠️  FOCUS A TEXT EDITOR OR TERMINAL NOW!")
+    click.echo("Text will be typed in 3 seconds...\n")
+
+    for i in range(3, 0, -1):
+        click.echo(f"{i}...")
+        time.sleep(1)
+
+    test_text = "Hello from Scribe! This is a typing test."
+    click.echo(f"\nTyping test message: '{test_text}'")
+
+    success = output_handler.output(test_text)
+
+    if success:
+        click.echo("\n✓ Typing test PASSED - text should appear in focused window")
+    else:
+        click.echo("\n✗ Typing test FAILED - check logs for details")
+        click.echo("Try running with debug mode: scribe test-typing --config ~/.config/scribe/config.toml")
+
+
+@cli.command()
+@click.argument("audio_file", type=click.Path(exists=True))
+@click.option("--config", "-c", type=click.Path(), help="Path to configuration file")
+@click.option("--output", "-o", type=click.Choice(["type", "clipboard"]), default="clipboard", help="Output mode")
+def test_audio(audio_file, config, output):
+    """Test transcription with a pre-recorded audio file.
+
+    This allows testing without needing to record audio live.
+
+    Example:
+        scribe test-audio recording.wav
+        scribe test-audio recording.wav --output type
+    """
+    from scribe.test_utils import load_audio_file
+
+    cfg = Config(config_path=config)
+    click.echo(f"Loading audio file: {audio_file}")
+
+    try:
+        audio_data = load_audio_file(audio_file, target_sample_rate=cfg["audio"]["sample_rate"])
+        click.echo(f"✓ Loaded {len(audio_data)} samples ({len(audio_data) / cfg['audio']['sample_rate']:.2f}s)")
+    except Exception as e:
+        click.echo(f"✗ Failed to load audio: {e}", err=True)
+        return
+
+    # Create transcriber
+    transcriber = Transcriber(
+        model_size=cfg["model"]["size"],
+        device=cfg["model"]["device"],
+        compute_type=cfg["model"]["compute_type"],
+    )
+
+    click.echo("\nTranscribing...")
+    transcription = transcriber.transcribe(audio_data, sample_rate=cfg["audio"]["sample_rate"])
+
+    if transcription:
+        click.echo(f"\n✓ Transcription: {transcription}")
+
+        # Output
+        output_handler = OutputHandler(mode=output)
+        click.echo(f"\nOutputting to {output}...")
+
+        if output == "type":
+            click.echo("⚠️  Focus your text editor/terminal now! Typing in 2 seconds...")
+            import time
+            time.sleep(2)
+
+        success = output_handler.output(transcription)
+
+        if success:
+            click.echo("✓ Output successful")
+        else:
+            click.echo("✗ Output failed", err=True)
+    else:
+        click.echo("\n✗ No transcription generated", err=True)
+
+
+@cli.command()
+@click.option("--config", "-c", type=click.Path(), help="Path to configuration file")
 @click.option("--model", "-m", help="Model size to download (default: from config)")
 def download(config, model):
     """Download and cache Whisper model.

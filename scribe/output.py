@@ -135,39 +135,75 @@ class OutputHandler:
             True if successful, False otherwise.
         """
         try:
+            logger.info(f"Attempting to type {len(text)} characters with xdotool")
+            logger.debug(f"Text to type: '{text[:50]}...'")
+
+            # Get current window info for debugging
+            try:
+                result = subprocess.run(
+                    ["xdotool", "getactivewindow", "getwindowname"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
+                )
+                if result.returncode == 0:
+                    logger.info(f"Active window: {result.stdout.strip()}")
+            except Exception as e:
+                logger.debug(f"Could not get active window: {e}")
+
             # Longer delay to ensure window has focus after notification
+            logger.debug("Waiting 0.5s for window focus...")
             time.sleep(0.5)
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)
-                for char in text:
-                    subprocess.run(
+                logger.debug(f"Typing with delay: {self.typing_delay}s per character")
+                for i, char in enumerate(text):
+                    result = subprocess.run(
                         ["xdotool", "type", "--clearmodifiers", "--", char],
-                        check=True,
                         capture_output=True,
+                        text=True,
                     )
+                    if result.returncode != 0:
+                        logger.error(f"xdotool failed at char {i}: {result.stderr}")
+                        return False
                     time.sleep(self.typing_delay)
             else:
                 # Type all at once with clearmodifiers to avoid stuck keys
-                subprocess.run(
+                logger.debug("Typing all text at once")
+                result = subprocess.run(
                     ["xdotool", "type", "--clearmodifiers", "--", text],
-                    check=True,
                     capture_output=True,
+                    text=True,
                 )
+
+                if result.returncode != 0:
+                    logger.error(f"xdotool failed: {result.stderr}")
+                    return False
+
+                if result.stderr:
+                    logger.warning(f"xdotool stderr: {result.stderr}")
 
             # Press Enter if requested
             if self.auto_enter:
-                subprocess.run(
+                logger.debug("Pressing Enter key")
+                result = subprocess.run(
                     ["xdotool", "key", "Return"],
-                    check=True,
                     capture_output=True,
+                    text=True,
                 )
+                if result.returncode != 0:
+                    logger.error(f"xdotool Enter failed: {result.stderr}")
+                    return False
 
             logger.info(f"Text typed successfully with xdotool ({len(text)} chars)")
             return True
 
         except subprocess.CalledProcessError as e:
             logger.error(f"xdotool error: {e.stderr.decode() if e.stderr else str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error in xdotool typing: {e}", exc_info=True)
             return False
 
     def _type_with_ydotool(self, text: str) -> bool:
