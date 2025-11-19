@@ -79,6 +79,10 @@ class Scribe:
             Exit code (0 for success, 1 for error).
         """
         try:
+            # Capture the currently focused window BEFORE any notifications
+            # This is the window where text should be typed
+            self.output_handler.capture_target_window()
+
             # Notify recording start
             self.notification_handler.notify_recording_started()
 
@@ -135,6 +139,10 @@ class Scribe:
             Exit code (0 for success, 1 for error).
         """
         try:
+            # Capture the currently focused window BEFORE any notifications
+            # This is the window where text should be typed
+            self.output_handler.capture_target_window()
+
             # Notify recording start
             self.notification_handler.notify_recording_started()
 

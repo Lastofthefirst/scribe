@@ -33,6 +33,10 @@ class OutputHandler:
         # Detect available typing tools
         self.typing_tool = self._detect_typing_tool()
 
+        # Window ID for typing (captured before notifications)
+        self.target_window_id = None
+        self.target_window_name = None
+
         logger.info(f"OutputHandler initialized: mode={mode}, tool={self.typing_tool}")
 
     def _detect_typing_tool(self) -> Optional[str]:
@@ -58,6 +62,44 @@ class OutputHandler:
 
         logger.warning("No typing tool found (xdotool/ydotool/wtype)")
         return None
+
+    def capture_target_window(self):
+        """Capture the currently focused window for later typing.
+
+        This should be called BEFORE any notifications are shown,
+        to ensure we capture the window where the user wants text typed.
+        """
+        if self.typing_tool != "xdotool":
+            # Only xdotool supports explicit window targeting
+            logger.debug("Window capture only supported for xdotool")
+            return
+
+        try:
+            # Get window with keyboard focus
+            result = subprocess.run(
+                ["xdotool", "getwindowfocus"],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            if result.returncode == 0:
+                self.target_window_id = result.stdout.strip()
+                logger.info(f"Captured target window ID: {self.target_window_id}")
+
+                # Get window name for logging
+                result = subprocess.run(
+                    ["xdotool", "getwindowname", self.target_window_id],
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
+                )
+                if result.returncode == 0:
+                    self.target_window_name = result.stdout.strip()
+                    logger.info(f"Target window name: '{self.target_window_name}'")
+            else:
+                logger.warning(f"Failed to capture window: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"Error capturing target window: {e}")
 
     def output(self, text: str) -> bool:
         """Output text using configured mode.
@@ -138,22 +180,52 @@ class OutputHandler:
             logger.info(f"Attempting to type {len(text)} characters with xdotool")
             logger.debug(f"Text to type: '{text[:50]}...'")
 
-            # Get current window info for debugging
+            # Use the pre-captured target window if available
+            if self.target_window_id:
+                logger.info(f"Using pre-captured window: ID={self.target_window_id}, name='{self.target_window_name}'")
+                window_id = self.target_window_id
+            else:
+                # Fallback: try to detect window now (less reliable)
+                logger.warning("No pre-captured window, attempting to detect current window")
+                try:
+                    result = subprocess.run(
+                        ["xdotool", "getwindowfocus"],
+                        capture_output=True,
+                        text=True,
+                        timeout=1,
+                    )
+                    if result.returncode == 0:
+                        window_id = result.stdout.strip()
+                        logger.debug(f"Detected window ID: {window_id}")
+                    else:
+                        logger.error("Could not detect any window for typing")
+                        return False
+                except Exception as e:
+                    logger.error(f"Error detecting window: {e}")
+                    return False
+
+            # Wait for notifications to clear
+            logger.debug("Waiting 1.0s for notifications to clear...")
+            time.sleep(1.0)
+
+            # Explicitly focus the target window
             try:
+                logger.info(f"Focusing window {window_id}")
                 result = subprocess.run(
-                    ["xdotool", "getactivewindow", "getwindowname"],
+                    ["xdotool", "windowfocus", "--sync", window_id],
                     capture_output=True,
                     text=True,
-                    timeout=1,
+                    timeout=2,
                 )
-                if result.returncode == 0:
-                    logger.info(f"Active window: {result.stdout.strip()}")
+                if result.returncode != 0:
+                    logger.warning(f"Could not focus window: {result.stderr}")
+                    logger.warning("Will try to type anyway...")
+                else:
+                    logger.info("Window focused successfully")
+                    # Small delay after focusing
+                    time.sleep(0.3)
             except Exception as e:
-                logger.debug(f"Could not get active window: {e}")
-
-            # Longer delay to ensure window has focus after notification
-            logger.debug("Waiting 0.5s for window focus...")
-            time.sleep(0.5)
+                logger.warning(f"Error focusing window: {e}")
 
             if self.typing_delay > 0:
                 # Type with delay (gradual appearance)
