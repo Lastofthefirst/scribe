@@ -1,6 +1,9 @@
 #!/bin/bash
-# Scribe Installation Script (UV-based)
-# Modern, fast installation using UV package manager
+#
+# Scribe Python Installation Script
+#
+# This script installs Scribe (Python version) with all dependencies using uv
+#
 
 set -e  # Exit on error
 
@@ -13,9 +16,11 @@ NC='\033[0m' # No Color
 
 # Print functions
 print_header() {
-    echo -e "${BLUE}================================================${NC}"
+    echo ""
+    echo "================================================"
     echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}================================================${NC}"
+    echo "================================================"
+    echo ""
 }
 
 print_success() {
@@ -34,413 +39,282 @@ print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   print_error "Do not run this script as root (without sudo)"
-   echo "The script will ask for sudo password when needed."
-   exit 1
-fi
-
-print_header "Scribe Installation (UV)"
-echo ""
-
-# Detect distribution
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    DISTRO=$ID
-    VERSION=$VERSION_ID
-else
-    print_error "Cannot detect Linux distribution"
-    exit 1
-fi
-
-print_info "Detected: $PRETTY_NAME"
-echo ""
-
-# Detect package manager
-case "$DISTRO" in
-    debian|ubuntu|linuxmint|pop|kde-neon)
-        PKG_MANAGER="apt"
-        ;;
-    fedora|rhel|centos|rocky|almalinux)
-        PKG_MANAGER="dnf"
-        ;;
-    arch|manjaro|endeavouros)
-        PKG_MANAGER="pacman"
-        ;;
-    *)
-        print_warning "Unsupported distribution: $DISTRO"
-        print_info "Installation will continue but may require manual dependency installation"
-        PKG_MANAGER="unknown"
-        ;;
-esac
-
-# Step 1: Check and install system dependencies
-print_header "Step 1: System Dependencies"
-echo ""
-
-DEPS_TO_INSTALL=()
-
-# Check for UV
-if command -v uv &> /dev/null; then
-    UV_VERSION=$(uv --version | awk '{print $2}')
-    print_success "UV $UV_VERSION found"
-else
-    print_warning "UV not found - will install"
-    INSTALL_UV=true
-fi
-
-# Check pkg-config (needed for library detection)
-if command -v pkg-config &> /dev/null; then
-    print_success "pkg-config found"
-else
-    print_warning "pkg-config not found"
-    DEPS_TO_INSTALL+=("pkg-config")
-fi
-
-# Check PortAudio (required for sounddevice)
-if command -v pkg-config &> /dev/null && pkg-config --exists portaudio-2.0; then
-    print_success "PortAudio library found"
-else
-    print_warning "PortAudio library not found"
-    case "$PKG_MANAGER" in
-        apt)
-            DEPS_TO_INSTALL+=("portaudio19-dev")
-            ;;
-        dnf)
-            DEPS_TO_INSTALL+=("portaudio-devel")
-            ;;
-        pacman)
-            DEPS_TO_INSTALL+=("portaudio")
-            ;;
-    esac
-fi
-
-# Check FFmpeg libraries (required for av/PyAV package)
-if command -v pkg-config &> /dev/null && pkg-config --exists libavformat libavcodec; then
-    print_success "FFmpeg libraries found"
-else
-    print_warning "FFmpeg libraries not found"
-    case "$PKG_MANAGER" in
-        apt)
-            DEPS_TO_INSTALL+=("ffmpeg" "libavcodec-dev" "libavformat-dev" "libavdevice-dev" "libavutil-dev" "libavfilter-dev" "libswscale-dev" "libswresample-dev")
-            ;;
-        dnf)
-            DEPS_TO_INSTALL+=("ffmpeg" "ffmpeg-devel")
-            ;;
-        pacman)
-            DEPS_TO_INSTALL+=("ffmpeg")
-            ;;
-    esac
-fi
-
-# Check for typing tool based on display server
-# Priority: Wayland (dotool/kdotool) > X11 (xdotool)
-TYPING_TOOL_FOUND=false
-
-# Check what's already installed
-if command -v dotool &> /dev/null; then
-    print_success "dotool found (Wayland/X11/TTY - recommended)"
-    TYPING_TOOL_FOUND=true
-fi
-
-if command -v kdotool &> /dev/null; then
-    print_success "kdotool found (KDE Plasma Wayland/X11)"
-    TYPING_TOOL_FOUND=true
-fi
-
-if command -v xdotool &> /dev/null; then
-    print_success "xdotool found (X11 support)"
-    TYPING_TOOL_FOUND=true
-fi
-
-if command -v ydotool &> /dev/null; then
-    print_success "ydotool found (Wayland support)"
-    TYPING_TOOL_FOUND=true
-fi
-
-if [ "$TYPING_TOOL_FOUND" = false ]; then
-    print_warning "No typing tool found"
-
-    # Detect display server
-    if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-        print_info "Wayland detected - will install dotool (recommended) or ydotool"
-
-        # Check if Rust/Cargo is available for dotool
-        if command -v cargo &> /dev/null; then
-            print_info "Cargo found - will install dotool via cargo (best option)"
-            INSTALL_DOTOOL_VIA_CARGO=true
-        else
-            print_info "Cargo not found - will install ydotool from package manager"
-            case "$PKG_MANAGER" in
-                apt)
-                    DEPS_TO_INSTALL+=("ydotool")
-                    ;;
-                dnf)
-                    DEPS_TO_INSTALL+=("ydotool")
-                    ;;
-                pacman)
-                    DEPS_TO_INSTALL+=("ydotool")
-                    ;;
-            esac
-        fi
+# Detect OS
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        VER=$VERSION_ID
+        print_info "Detected: $PRETTY_NAME"
     else
-        print_info "X11 detected, will install xdotool"
-        DEPS_TO_INSTALL+=("xdotool")
+        print_error "Cannot detect OS"
+        exit 1
     fi
-fi
+}
 
-# Check for notification tool
-NOTIFY_TOOL_FOUND=false
-for tool in notify-send kdialog zenity; do
-    if command -v $tool &> /dev/null; then
-        print_success "$tool found"
-        NOTIFY_TOOL_FOUND=true
-        break
-    fi
-done
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
 
-if [ "$NOTIFY_TOOL_FOUND" = false ]; then
-    print_warning "No notification tool found"
-    DEPS_TO_INSTALL+=("libnotify-bin")
-fi
-
-# Check for audio playback tool
-AUDIO_TOOL_FOUND=false
-for tool in paplay aplay ffplay mpv; do
-    if command -v $tool &> /dev/null; then
-        print_success "$tool found (audio playback)"
-        AUDIO_TOOL_FOUND=true
-        break
-    fi
-done
-
-if [ "$AUDIO_TOOL_FOUND" = false ]; then
-    print_warning "No audio playback tool found"
-    case "$PKG_MANAGER" in
-        apt)
-            DEPS_TO_INSTALL+=("pulseaudio-utils")
-            ;;
-        dnf)
-            DEPS_TO_INSTALL+=("pulseaudio-utils")
-            ;;
-        pacman)
-            DEPS_TO_INSTALL+=("libpulse")
-            ;;
-    esac
-fi
-
-# Install missing dependencies
-if [ ${#DEPS_TO_INSTALL[@]} -gt 0 ]; then
-    echo ""
-    print_info "Installing missing dependencies: ${DEPS_TO_INSTALL[*]}"
-
-    case "$PKG_MANAGER" in
-        apt)
-            sudo apt update
-            sudo apt install -y "${DEPS_TO_INSTALL[@]}"
-            ;;
-        dnf)
-            sudo dnf install -y "${DEPS_TO_INSTALL[@]}"
-            ;;
-        pacman)
-            sudo pacman -S --noconfirm "${DEPS_TO_INSTALL[@]}"
-            ;;
-        *)
-            print_error "Cannot auto-install dependencies on this distribution"
-            print_info "Please manually install: ${DEPS_TO_INSTALL[*]}"
+# Install uv if not present
+install_uv() {
+    if ! command_exists uv; then
+        print_info "Installing uv (Python package manager)..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        # Source the env to make uv available
+        export PATH="$HOME/.local/bin:$PATH"
+        if ! command_exists uv; then
+            print_error "Failed to install uv. Please install manually: https://docs.astral.sh/uv/getting-started/installation/"
             exit 1
-            ;;
-    esac
-
-    print_success "System dependencies installed"
-else
-    print_success "All system dependencies satisfied"
-fi
-
-echo ""
-
-# Step 1.5: Install dotool via cargo if needed
-if [ "$INSTALL_DOTOOL_VIA_CARGO" = true ]; then
-    print_header "Step 1.5: Installing dotool (Wayland Typing Tool)"
-    echo ""
-
-    print_info "Installing dotool via cargo..."
-    print_info "This may take a few minutes to compile..."
-
-    # Ensure cargo bin is in PATH
-    export PATH="$HOME/.cargo/bin:$PATH"
-
-    # Install dotool
-    cargo install dotool
-
-    if command -v dotool &> /dev/null; then
-        print_success "dotool installed successfully"
+        fi
+        print_success "uv installed"
     else
-        print_warning "dotool installation failed, will fallback to ydotool"
-        # Fall back to ydotool
-        case "$PKG_MANAGER" in
-            apt)
-                sudo apt install -y ydotool
-                ;;
-            dnf)
-                sudo dnf install -y ydotool
-                ;;
-            pacman)
-                sudo pacman -S --noconfirm ydotool
-                ;;
-        esac
+        print_success "uv found"
+    fi
+}
+
+# Check and install system dependencies
+install_system_deps() {
+    print_header "Checking System Dependencies"
+
+    local missing_deps=()
+    local typing_tool_found=false
+
+    # Check Python 3
+    if command_exists python3; then
+        python_version=$(python3 --version | cut -d' ' -f2)
+        print_success "Python $python_version found"
+    else
+        print_error "Python 3 not found"
+        missing_deps+=("python3")
     fi
 
-    echo ""
-fi
-
-# Step 2: Install UV if needed
-if [ "$INSTALL_UV" = true ]; then
-    print_header "Step 2: Installing UV"
-    echo ""
-
-    print_info "Downloading and installing UV package manager..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-
-    # Add UV to PATH for this session
-    export PATH="$HOME/.local/bin:$PATH"
-
-    if command -v uv &> /dev/null; then
-        UV_VERSION=$(uv --version | awk '{print $2}')
-        print_success "UV $UV_VERSION installed successfully"
+    # Check pkg-config
+    if command_exists pkg-config; then
+        print_success "pkg-config found"
     else
-        print_error "UV installation failed"
+        print_warning "pkg-config not found"
+        missing_deps+=("pkg-config")
+    fi
+
+    # Check PortAudio
+    if pkg-config --exists portaudio-2.0 2>/dev/null; then
+        print_success "PortAudio library found"
+    else
+        print_warning "PortAudio library not found"
+        missing_deps+=("portaudio19-dev")
+    fi
+
+    # Check FFmpeg
+    if pkg-config --exists libavcodec 2>/dev/null; then
+        print_success "FFmpeg libraries found"
+    else
+        print_warning "FFmpeg libraries not found"
+        missing_deps+=("ffmpeg" "libavcodec-dev" "libavformat-dev" "libavdevice-dev" "libavutil-dev" "libavfilter-dev" "libswscale-dev" "libswresample-dev")
+    fi
+
+    # Check for typing tools
+    if command_exists dotool; then
+        print_success "dotool found (Wayland typing tool)"
+        typing_tool_found=true
+    elif command_exists kdotool; then
+        print_success "kdotool found (KDE typing tool)"
+        typing_tool_found=true
+    elif command_exists xdotool; then
+        print_success "xdotool found (X11/XWayland typing tool)"
+        typing_tool_found=true
+    elif command_exists ydotool; then
+        print_success "ydotool found (Universal typing tool)"
+        typing_tool_found=true
+    elif command_exists wtype; then
+        print_success "wtype found (Wayland typing tool)"
+        typing_tool_found=true
+    else
+        print_warning "No typing tool found"
+        # xdotool works on both X11 and Wayland (via XWayland)
+        print_info "Will install xdotool (works on X11 and Wayland via XWayland)"
+        missing_deps+=("xdotool")
+    fi
+
+    # Check notification tools
+    if command_exists notify-send; then
+        print_success "notify-send found"
+    elif command_exists kdialog; then
+        print_success "kdialog found"
+    elif command_exists zenity; then
+        print_success "zenity found"
+    else
+        print_warning "No notification tool found - will install libnotify"
+        missing_deps+=("libnotify-bin")
+    fi
+
+    # Check audio playback
+    if command_exists paplay; then
+        print_success "paplay found (audio playback)"
+    elif command_exists aplay; then
+        print_success "aplay found (audio playback)"
+    elif command_exists mpv; then
+        print_success "mpv found (audio playback)"
+    else
+        print_warning "No audio playback tool found - will install pulseaudio-utils"
+        missing_deps+=("pulseaudio-utils")
+    fi
+
+    # Install missing dependencies
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        print_info "Installing missing system dependencies..."
+        print_info "Packages: ${missing_deps[*]}"
+
+        if [ "$OS" = "debian" ] || [ "$OS" = "ubuntu" ]; then
+            sudo apt-get update
+            sudo apt-get install -y "${missing_deps[@]}"
+            print_success "System dependencies installed"
+        elif [ "$OS" = "fedora" ]; then
+            sudo dnf install -y "${missing_deps[@]}"
+            print_success "System dependencies installed"
+        elif [ "$OS" = "arch" ]; then
+            sudo pacman -S --noconfirm "${missing_deps[@]}"
+            print_success "System dependencies installed"
+        else
+            print_error "Unsupported OS: $OS"
+            print_info "Please install these packages manually: ${missing_deps[*]}"
+            exit 1
+        fi
+    fi
+}
+
+# Create Python virtual environment and install dependencies
+install_python_deps() {
+    print_header "Installing Python Dependencies"
+
+    # Create venv with uv
+    print_info "Creating virtual environment with uv..."
+    uv venv .venv
+
+    # Activate venv
+    source .venv/bin/activate
+
+    # Install dependencies with uv (much faster than pip)
+    print_info "Installing Python packages with uv..."
+    uv pip install -e .
+
+    print_success "Python dependencies installed"
+}
+
+# Download Whisper model
+download_model() {
+    print_header "Downloading Whisper Model"
+
+    local model_dir="$HOME/.cache/whisper"
+    mkdir -p "$model_dir"
+
+    print_info "Model will be downloaded on first run"
+    print_info "Location: $model_dir"
+    print_success "Model directory created"
+}
+
+# Create launcher script
+create_launcher() {
+    print_header "Creating Launcher"
+
+    local install_dir="$(pwd)"
+    local launcher="$HOME/.local/bin/scribe"
+
+    # Create .local/bin if it doesn't exist
+    mkdir -p "$HOME/.local/bin"
+
+    # Create launcher script
+    cat > "$launcher" <<EOF
+#!/bin/bash
+# Scribe launcher script
+source "$install_dir/.venv/bin/activate"
+exec python -m scribe "\$@"
+EOF
+
+    chmod +x "$launcher"
+
+    # Add to PATH if not already there
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        export PATH="$HOME/.local/bin:$PATH"
+        print_warning "Added $HOME/.local/bin to PATH in ~/.bashrc"
+        print_warning "Run: source ~/.bashrc  (or restart your shell)"
+    fi
+
+    print_success "Launcher created: $launcher"
+}
+
+# Create config file
+create_config() {
+    print_header "Creating Configuration"
+
+    local config_dir="$HOME/.config/scribe"
+    local config_file="$config_dir/config.toml"
+
+    mkdir -p "$config_dir"
+
+    if [ ! -f "$config_file" ]; then
+        cp config.example.toml "$config_file"
+        print_success "Config created: $config_file"
+    else
+        print_info "Config already exists: $config_file"
+    fi
+}
+
+# Main installation
+main() {
+    print_header "Scribe Python Installation"
+
+    # Detect OS
+    detect_os
+
+    # Check if we're in the scribe directory
+    if [ ! -f "pyproject.toml" ]; then
+        print_error "Please run this script from the scribe directory"
         exit 1
     fi
 
+    # Install uv
+    install_uv
+
+    # Install system dependencies
+    install_system_deps
+
+    # Install Python dependencies
+    install_python_deps
+
+    # Download model
+    download_model
+
+    # Create launcher
+    create_launcher
+
+    # Create config
+    create_config
+
+    # Final message
+    print_header "Installation Complete!"
+
+    print_success "Scribe (Python) installed successfully!"
     echo ""
-fi
-
-# Step 3: Install Scribe with UV
-print_header "Step 3: Installing Scribe"
-echo ""
-
-print_info "UV will automatically:"
-print_info "  • Download the correct Python version (3.11-3.13)"
-print_info "  • Create an optimized virtual environment"
-print_info "  • Install all dependencies (this may take a few minutes)"
-echo ""
-
-# UV will handle everything: Python version, venv, dependencies, and generate lockfile
-uv sync
-
-print_success "Scribe installed successfully"
-echo ""
-
-# Step 4: Create launcher script
-print_header "Step 4: Creating Launcher"
-echo ""
-
-LAUNCHER_SCRIPT="$HOME/.local/bin/scribe"
-mkdir -p "$HOME/.local/bin"
-
-cat > "$LAUNCHER_SCRIPT" << 'EOF'
-#!/bin/bash
-# Scribe launcher script (UV-based)
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-
-# Find the scribe project directory
-if [ -f "$PROJECT_DIR/pyproject.toml" ] && grep -q "scribe-stt" "$PROJECT_DIR/pyproject.toml"; then
-    cd "$PROJECT_DIR"
-    exec uv run scribe "$@"
-else
-    # Search for scribe installation
-    for dir in ~/ridvan/projects/scribe ~/.local/share/scribe ~/scribe; do
-        if [ -f "$dir/pyproject.toml" ] && grep -q "scribe-stt" "$dir/pyproject.toml"; then
-            cd "$dir"
-            exec uv run scribe "$@"
-        fi
-    done
-
-    echo "Error: Could not find scribe installation" >&2
-    exit 1
-fi
-EOF
-
-chmod +x "$LAUNCHER_SCRIPT"
-print_success "Launcher script created at $LAUNCHER_SCRIPT"
-
-# Check if ~/.local/bin is in PATH
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    print_info "To use Scribe, either:"
+    echo "  1. Restart your shell (or run: source ~/.bashrc)"
+    echo "  2. Run directly: $HOME/.local/bin/scribe"
     echo ""
-    print_warning "~/.local/bin is not in PATH"
-    print_info "Add this line to your ~/.bashrc or ~/.zshrc:"
+    print_info "Test your installation:"
+    echo "  scribe test         # Test system setup"
+    echo "  scribe test-typing  # Test typing functionality"
+    echo "  scribe              # Start recording"
+    echo "  scribe --stream     # Start streaming mode"
     echo ""
-    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    print_info "Configuration file: $HOME/.config/scribe/config.toml"
     echo ""
-    print_info "Then run: source ~/.bashrc (or restart your terminal)"
-fi
 
-echo ""
+    # Activate venv for current session
+    source .venv/bin/activate
+    print_success "Virtual environment activated for this session"
+}
 
-# Step 5: Setup configuration
-print_header "Step 5: Configuration Setup"
-echo ""
-
-uv run scribe setup
-
-echo ""
-
-# Step 6: Download default model
-print_header "Step 6: Download Speech Model"
-echo ""
-
-read -p "Download default model (tiny.en, ~39MB)? [Y/n] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    print_info "Downloading model... (this may take a minute)"
-    uv run scribe download
-    print_success "Model downloaded"
-else
-    print_info "Skipping model download (will download on first run)"
-fi
-
-echo ""
-
-# Final instructions
-print_header "Installation Complete!"
-echo ""
-
-print_success "Scribe is now installed and ready to use!"
-echo ""
-print_info "Quick Start:"
-echo "  1. Run 'scribe' to start recording with voice detection"
-echo "  2. Speak clearly, and Scribe will transcribe when you pause"
-echo "  3. Text will be typed at your cursor position"
-echo ""
-print_info "Useful Commands:"
-echo "  scribe test           - Test your setup"
-echo "  scribe --help         - Show all options"
-echo "  scribe models         - List available models"
-echo "  scribe --output clipboard  - Copy to clipboard instead of typing"
-echo ""
-print_info "Configuration:"
-echo "  Edit: ~/.config/scribe/config.toml"
-echo ""
-print_info "Keybinding Setup (KDE):"
-echo "  1. System Settings → Shortcuts → Custom Shortcuts"
-echo "  2. Add new command: 'scribe'"
-echo "  3. Set your preferred hotkey (e.g., Meta+S)"
-echo ""
-print_info "Keybinding Setup (GNOME):"
-echo "  1. Settings → Keyboard → Custom Shortcuts"
-echo "  2. Add new shortcut with command: 'scribe'"
-echo "  3. Set your preferred hotkey"
-echo ""
-
-# Check if PATH update needed
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    print_warning "Don't forget to add ~/.local/bin to your PATH!"
-    echo "  Run: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-    echo "  Then: source ~/.bashrc"
-    echo ""
-fi
-
-print_success "Happy transcribing! 🎤"
+# Run main
+main

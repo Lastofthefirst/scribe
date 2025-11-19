@@ -110,6 +110,20 @@ install_system_deps() {
         fi
     fi
 
+    # Check libclang (required for whisper-rs bindings via bindgen)
+    if ldconfig -p | grep -q libclang 2>/dev/null || [ -f "/usr/lib/libclang.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/libclang.so.1" ]; then
+        print_success "libclang found"
+    else
+        print_warning "libclang not found (required for whisper-rs)"
+        if [ "$OS" = "debian" ] || [ "$OS" = "ubuntu" ]; then
+            missing_deps+=("libclang-dev" "clang")
+        elif [ "$OS" = "fedora" ]; then
+            missing_deps+=("clang-devel")
+        elif [ "$OS" = "arch" ]; then
+            missing_deps+=("clang")
+        fi
+    fi
+
     # Check for typing tools
     if command_exists dotool; then
         print_success "dotool found (Wayland typing tool)"
