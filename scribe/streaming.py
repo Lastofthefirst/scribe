@@ -58,6 +58,7 @@ class StreamingRecorder:
 
         current_chunk = []
         silence_start = None
+        last_speech_time = time.time()  # Track when speech last occurred (for final pause)
         last_chunk_time = time.time()
         recording_start = time.time()
         speech_detected = False
@@ -86,6 +87,7 @@ class StreamingRecorder:
 
                     if is_speech:
                         speech_detected = True
+                        last_speech_time = time.time()  # Update when speech is detected
                         silence_start = None
                     else:
                         # Silence detected
@@ -94,6 +96,7 @@ class StreamingRecorder:
 
                         if silence_start:
                             silence_duration = time.time() - silence_start
+                            time_since_last_speech = time.time() - last_speech_time
 
                             # Check for chunk pause (transcribe but continue recording)
                             if silence_duration >= self.chunk_pause and len(current_chunk) > 0:
@@ -116,11 +119,11 @@ class StreamingRecorder:
                                         )
 
                                 current_chunk = []
-                                silence_start = None
+                                silence_start = time.time()  # Reset for next chunk, but keep last_speech_time
 
-                            # Check for final pause (end recording)
-                            if silence_duration >= self.final_pause:
-                                logger.info(f"Final pause detected ({silence_duration:.1f}s), ending recording")
+                            # Check for final pause (end recording) - use time since LAST SPEECH, not current silence
+                            if time_since_last_speech >= self.final_pause:
+                                logger.info(f"Final pause detected ({time_since_last_speech:.1f}s since last speech), ending recording")
                                 break
 
                     # Check for maximum duration timeout

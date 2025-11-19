@@ -12,14 +12,14 @@ name = "scribe"
 path = "src/main.rs"
 
 [dependencies]
-# Whisper (speech recognition) - TODO: implement
-# whisper-rs = { version = "0.15", features = ["cuda"] }
+# Whisper (speech recognition)
+whisper-rs = { version = "0.12" }
 
-# Audio - TODO: implement
-# cpal = "0.15"
+# Audio
+cpal = "0.15"
 
-# VAD - TODO: implement
-# webrtc-vad = "0.4"
+# VAD
+webrtc-vad = "0.4"
 
 # CLI
 clap = { version = "4", features = ["derive", "cargo"] }
@@ -31,17 +31,18 @@ toml = "0.8"
 # Clipboard
 cli-clipboard = "0.4"
 
-# Notifications - TODO: use subprocess like Python version
-# notify-rust = { version = "4", default-features = false, features = ["zbus"] }
-
 # Error handling & Logging
 anyhow = "1"
 thiserror = "1"
 log = "0.4"
 env_logger = "0.11"
 
-# Async (for streaming) - TODO: implement
-# tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+# Async (for streaming)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Audio processing
+hound = "3.5"  # WAV file I/O
+ndarray = "0.15"  # Array processing
 
 # Cross-platform paths
 dirs = "5"

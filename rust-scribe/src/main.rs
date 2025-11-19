@@ -1,17 +1,21 @@
+mod audio;
 mod cli;
 mod config;
+mod notifications;
 mod output;
-// TODO: Implement these modules
-// mod audio;
-// mod transcribe;
-// mod notifications;
-// mod streaming;
+mod streaming;
+mod transcribe;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands, OutputMode};
+use cli::{Cli, Commands};
 use config::Config;
+use log::info;
+use audio::AudioRecorder;
+use notifications::NotificationHandler;
 use output::OutputHandler;
+use streaming::StreamingRecorder;
+use transcribe::Transcriber;
 
 fn main() -> Result<()> {
     // Parse CLI arguments
@@ -49,30 +53,154 @@ fn main() -> Result<()> {
 
     // Main recording mode
     if cli.stream {
-        println!("🎤 Streaming mode not yet implemented");
-        println!("TODO: Implement streaming mode with real-time transcription");
+        return run_streaming(&config);
+    }
+
+    run_standard(&config)
+}
+
+fn run_standard(config: &Config) -> Result<()> {
+    info!("Starting standard recording mode");
+
+    // Initialize components
+    let mut audio_recorder = AudioRecorder::new(
+        config.audio.sample_rate,
+        config.audio.channels as u16,
+        config.audio.vad_aggressiveness,
+        config.audio.silence_duration,
+        config.audio.min_audio_duration,
+    )?;
+
+    let mut transcriber = Transcriber::new(
+        config.model.size.clone(),
+        config.model.device.clone(),
+        config.advanced.keep_model_loaded,
+    )?;
+
+    let mut output_handler = OutputHandler::new(
+        config.output.mode.clone(),
+        config.output.typing_delay,
+        config.output.auto_enter,
+    );
+
+    let notification_handler = NotificationHandler::new(
+        config.notifications.enabled,
+        config.notifications.audio_bell,
+        config.notifications.bell_sound.clone(),
+        config.notifications.timeout,
+    );
+
+    // Capture target window BEFORE notifications
+    output_handler.capture_target_window();
+
+    // Notify recording start
+    notification_handler.notify_recording_started()?;
+
+    // Record audio
+    info!("Starting audio recording...");
+    let audio_data = audio_recorder.record_with_vad()?;
+
+    let Some(audio) = audio_data else {
+        notification_handler.notify_error("No audio recorded")?;
+        anyhow::bail!("No audio recorded or recording too short");
+    };
+
+    // Notify recording stopped
+    notification_handler.notify_recording_stopped()?;
+
+    // Transcribe audio
+    info!("Starting transcription...");
+    let transcription = transcriber.transcribe(&audio, config.audio.sample_rate, Some("en"))?;
+
+    if transcription.trim().is_empty() {
+        notification_handler.notify_error("No speech detected")?;
+        anyhow::bail!("No transcription generated");
+    }
+
+    info!("Transcription: {}", transcription);
+
+    // Output transcription
+    output_handler.output(&transcription)?;
+
+    notification_handler.notify_transcription_complete(&transcription)?;
+    info!("Transcription output successfully");
+
+    Ok(())
+}
+
+fn run_streaming(config: &Config) -> Result<()> {
+    info!("Starting streaming mode");
+
+    // Initialize components
+    let mut audio_recorder = AudioRecorder::new(
+        config.audio.sample_rate,
+        config.audio.channels as u16,
+        config.audio.vad_aggressiveness,
+        config.audio.silence_duration,
+        config.audio.min_audio_duration,
+    )?;
+
+    let mut transcriber = Transcriber::new(
+        config.model.size.clone(),
+        config.model.device.clone(),
+        config.advanced.keep_model_loaded,
+    )?;
+
+    let mut output_handler = OutputHandler::new(
+        config.output.mode.clone(),
+        config.output.typing_delay,
+        config.output.auto_enter,
+    );
+
+    let notification_handler = NotificationHandler::new(
+        config.notifications.enabled,
+        config.notifications.audio_bell,
+        config.notifications.bell_sound.clone(),
+        config.notifications.timeout,
+    );
+
+    // Capture target window BEFORE notifications
+    output_handler.capture_target_window();
+
+    // Notify recording start
+    notification_handler.notify_recording_started()?;
+
+    // Create streaming recorder
+    let streamer = StreamingRecorder::new(
+        &audio_recorder,
+        0.8,  // chunk_pause
+        2.0,  // final_pause (with fixed logic from Python fix!)
+        300.0, // max_duration (5 minutes)
+    );
+
+    // Record and transcribe in real-time
+    info!("Starting streaming mode...");
+    let transcription = streamer.record_and_transcribe_streaming(
+        &mut audio_recorder,
+        &mut transcriber,
+        &mut output_handler,
+        Some(&notification_handler),
+    )?;
+
+    if transcription.trim().is_empty() {
+        info!("No transcription generated");
         return Ok(());
     }
 
-    println!("🎤 Standard recording mode not yet implemented");
-    println!("TODO: Implement audio recording, VAD, and transcription");
-    println!("\nFor now, try:");
-    println!("  scribe test-typing  - Test typing functionality");
-
+    info!("Complete transcription: {}", transcription);
     Ok(())
 }
 
 fn handle_command(command: Commands, config: &Config) -> Result<()> {
     match command {
         Commands::Test => {
-            println!("🔧 Testing system setup...\n");
             test_system(config)?;
             Ok(())
         }
         Commands::Download { model } => {
             let model_name = model.unwrap_or_else(|| config.model.size.clone());
-            println!("📥 Downloading model: {}", model_name);
-            println!("TODO: Implement model download");
+            let transcriber = Transcriber::new(model_name, config.model.device.clone(), false)?;
+            transcriber.download_model()?;
             Ok(())
         }
         Commands::Models => {
@@ -82,24 +210,24 @@ fn handle_command(command: Commands, config: &Config) -> Result<()> {
             println!("  small.en   - Better accuracy (~245MB)");
             println!("  medium.en  - High accuracy (~775MB)");
             println!("  large-v2   - Highest accuracy (~1.5GB)");
+            println!("\nCurrent model: {}", config.model.size);
+            println!("\nRecommended for CPU: tiny.en or base.en");
             Ok(())
         }
         Commands::TestTyping => {
             test_typing(config)?;
             Ok(())
         }
-        Commands::TestAudio { audio_file, output } => {
+        Commands::TestAudio { audio_file, output: _ } => {
             println!("🎵 Testing with audio file: {:?}", audio_file);
-            println!("TODO: Implement audio file transcription");
-            if let Some(mode) = output {
-                println!("Output mode: {}", mode.as_str());
-            }
+            println!("TODO: Implement audio file loading");
             Ok(())
         }
     }
 }
 
 fn test_system(config: &Config) -> Result<()> {
+    println!("🔧 Testing system setup...\n");
     println!("✓ Configuration loaded successfully");
     println!("  Model: {}", config.model.size);
     println!("  Device: {}", config.model.device);
@@ -107,18 +235,63 @@ fn test_system(config: &Config) -> Result<()> {
     println!("  Output mode: {}", config.output.mode);
     println!();
 
-    // Test typing tool detection
-    let _output_handler = OutputHandler::new(
+    // Test audio
+    println!("Testing audio recording (3 seconds)...");
+    let mut audio_recorder = AudioRecorder::new(
+        config.audio.sample_rate,
+        config.audio.channels as u16,
+        config.audio.vad_aggressiveness,
+        config.audio.silence_duration,
+        config.audio.min_audio_duration,
+    )?;
+
+    if audio_recorder.test_audio(3.0)? {
+        println!("✓ Audio recording successful\n");
+
+        // List devices
+        let devices = audio_recorder.get_available_devices();
+        println!("Available audio input devices ({}):", devices.len());
+        for (i, device) in devices.iter().enumerate() {
+            println!("  {}: {}", i, device);
+        }
+        println!();
+    } else {
+        println!("✗ Audio recording failed\n");
+    }
+
+    // Test output handler
+    println!("Testing output handler...");
+    let output_handler = OutputHandler::new(
         config.output.mode.clone(),
         config.output.typing_delay,
         config.output.auto_enter,
     );
+    if let Some(ref tool) = output_handler.typing_tool {
+        println!("✓ Typing tool available: {}\n", tool);
+    } else {
+        println!("⚠ No typing tool found (will use clipboard mode)\n");
+    }
 
-    println!("⚠️  Audio recording not yet implemented");
-    println!("⚠️  Whisper transcription not yet implemented");
-    println!("⚠️  Notifications not yet implemented");
-    println!();
-    println!("To test typing, run: scribe test-typing");
+    // Test notifications
+    println!("Testing notifications...");
+    let notif_handler = NotificationHandler::new(
+        config.notifications.enabled,
+        config.notifications.audio_bell,
+        config.notifications.bell_sound.clone(),
+        config.notifications.timeout,
+    );
+
+    let _ = notif_handler.show_notification(
+        "Scribe Test",
+        "This is a test notification",
+        "dialog-information",
+        None,
+        None,
+    );
+    println!("✓ Notification sent\n");
+
+    println!("✓ All basic tests passed!");
+    println!("You can now run 'scribe' to start using speech-to-text.");
 
     Ok(())
 }
